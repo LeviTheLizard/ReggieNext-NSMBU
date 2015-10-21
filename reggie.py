@@ -18074,21 +18074,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
             progress.setValue(0)
         if app.splashscrn is not None:
             updateSplash(trans.string('Splash', 2), 0)
-
-        # Load the actual level for this specific game
-        if game is NewSuperMarioBros:
-            # This game is not supported... YET
-            raise NotImplementedError
-        elif game is NewSuperMarioBrosWii:
-            self.LoadLevel_NSMBW(levelData, areaNum, progress)
-        elif game is NewSuperMarioBros2:
-            self.LoadLevel_NSMBU(levelData, areaNum, progress)
-        elif game is NewSuperMarioBrosU:
-            # This game is not supported... YET
-            raise NotImplementedError
-        elif game is NewSuperLuigiU:
-            # This game is not supported... YET
-            raise NotImplementedError
+        self.LoadLevel_NSMBU(levelData, areaNum, progress)
 
         # Set the level overview settings
         mainWindow.levelOverview.maxX = 100
@@ -18154,14 +18140,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
 
         # If we got this far, everything worked! Return True.
         return True
-
-
-    def LoadLevel_NSMBW(self, levelData, areaNum, progress):
-        """
-        Performs all level-loading tasks specific to New Super Mario Bros. Wii levels.
-        Do not call this directly - use LoadLevel(NewSuperMarioBrosWii, ...) instead!
-        """
-        raise NotImplementedError
 
     def LoadLevel_NSMBU(self, levelData, areaNum, progress):
         """
@@ -18445,22 +18423,19 @@ class ReggieWindow(QtWidgets.QMainWindow):
                 elif ent: text = trans.string('Statusbar', 2)  # 1 entrance selected
                 elif loc: text = trans.string('Statusbar', 3)  # 1 location selected
                 elif path: text = trans.string('Statusbar', 4)  # 1 path node selected
-                elif progpath: text = trans.string('Statusbar', 34)  # 1 progress path node selected
                 else: text = trans.string('Statusbar', 29) # 1 comment selected
             else: # multiple things selected; see if they're all the same type
-                if not any((spr, ent, loc, path, progpath, com)):
+                if not any((spr, ent, loc, path, com)):
                     text = trans.string('Statusbar', 5, '[x]', obj) # x objects selected
-                elif not any((obj, ent, loc, path, progpath, com)):
+                elif not any((obj, ent, loc, path, com)):
                     text = trans.string('Statusbar', 6, '[x]', spr) # x sprites selected
-                elif not any((obj, spr, loc, path, progpath, com)):
+                elif not any((obj, spr, loc, path, com)):
                     text = trans.string('Statusbar', 7, '[x]', ent) # x entrances selected
-                elif not any((obj, spr, ent, path, progpath, com)):
+                elif not any((obj, spr, ent, path, com)):
                     text = trans.string('Statusbar', 8, '[x]', loc) # x locations selected
-                elif not any((obj, spr, ent, loc, progpath, com)):
+                elif not any((obj, spr, ent, loc, com)):
                     text = trans.string('Statusbar', 9, '[x]', path) # x path nodes selected
-                elif not any((obj, spr, ent, loc, path, com)):
-                    text = trans.string('Statusbar', 35, '[x]', progpath) # x progress path nodes selected
-                elif not any((obj, spr, ent, loc, path, progpath)):
+                elif not any((obj, spr, ent, loc, path)):
                     text = trans.string('Statusbar', 30, '[x]', com) # x comments selected
                 else: # different types
                     text = trans.string('Statusbar', 10, '[x]', len(selitems)) # x items selected
@@ -18470,7 +18445,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
                         (ent, 16, 17),
                         (loc, 18, 19),
                         (path, 20, 21),
-                        (progpath, 36, 37),
                         (com, 31, 32),
                         )
                     first = True
