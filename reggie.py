@@ -4289,7 +4289,7 @@ class ZoneItem(LevelEditorItem):
         #painter.setClipRect(option.exposedRect)
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
 
-        # Paint an indicator line to show the leftmost edge of
+        # Paint an indicator line to show the leftmost edge o
         # where entrances can be safely placed
         if TileWidth * 13 < self.DrawRect.width():
             painter.setPen(QtGui.QPen(theme.color('zone_entrance_helper'), 2 * TileWidth / 24))
@@ -10068,6 +10068,7 @@ class ReggieTranslation():
                 73: '[b]Lower Bounds 2:[/b][br]Unknown differences from the main lower bounds.',
                 74: 'Unknown Flag',
                 75: '[b]Unknown Flag:[/b][br]Unknown purpose. Seems to be always checked.',
+                76: 'some unknown thing',
                 },
             'Zones': {
                 0: 'Zone [num]',
@@ -12057,25 +12058,26 @@ class ZonesDialog(QtWidgets.QDialog):
 
     @QtCore.pyqtSlot()
     def NewZone(self):
-        if len(self.zoneTabs) >= 8:
-            result = QtWidgets.QMessageBox.warning(self, trans.string('ZonesDlg', 6), trans.string('ZonesDlg', 7), QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-            if result == QtWidgets.QMessageBox.No:
-                return
-
-        a = []
-        b = []
-
-        a.append([0, 0, 0, 0, 0, 0])
-        b.append([0, 0, 0, 0, 0, 10, 10, 10, 0])
-        id = len(self.zoneTabs)
-        z = ZoneItem(256, 256, 448, 224, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, a, b, b, id)
-        ZoneTabName = trans.string('ZonesDlg', 3, '[num]', id+1)
-        tab = ZoneTab(z)
-        self.zoneTabs.append(tab)
-        self.tabWidget.addTab(tab, ZoneTabName)
-        if self.tabWidget.count() > 5:
-            for tab in range(0, self.tabWidget.count()):
-                self.tabWidget.setTabText(tab, str(tab + 1))
+        print('does not work right now')
+##        if len(self.zoneTabs) >= 8:
+##            result = QtWidgets.QMessageBox.warning(self, trans.string('ZonesDlg', 6), trans.string('ZonesDlg', 7), QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+##            if result == QtWidgets.QMessageBox.No:
+##                return
+##
+##        a = []
+##        b = []
+##
+##        a.append([0, 0, 0, 0, 0, 0])
+##        b.append([0, 0, 0, 0, 0, 10, 10, 10, 0])
+##        id = len(self.zoneTabs)
+##        z = ZoneItem(256, 256, 448, 224, 0, 0, id, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+##        ZoneTabName = trans.string('ZonesDlg', 3, '[num]', id+1)
+##        tab = ZoneTab(z)
+##        self.zoneTabs.append(tab)
+##        self.tabWidget.addTab(tab, ZoneTabName)
+##        if self.tabWidget.count() > 5:
+##            for tab in range(0, self.tabWidget.count()):
+##                self.tabWidget.setTabText(tab, str(tab + 1))
 
         #self.NewButton.setEnabled(len(self.zoneTabs) < 8)
 
@@ -12120,6 +12122,7 @@ class ZoneTab(QtWidgets.QWidget):
         mainLayout.addWidget(self.Visibility)
         mainLayout.addWidget(self.Bounds)
         mainLayout.addWidget(self.Audio)
+        mainLayout.addWidget(self.Unks)
         self.setLayout(mainLayout)
 
 
@@ -12185,15 +12188,23 @@ class ZoneTab(QtWidgets.QWidget):
 
 
     def createUnks(self, z):
-        self.Unks = QtWidgets.QGroupBox('Unknown Values')
+        self.Unks = QtWidgets.QGroupBox('Misc Values')
 
         self.unk0B = QtWidgets.QSpinBox()
         self.unk0B.setRange(0, 255)
-        self.unk0B.setToolTip(trans.string('ZonesDlg', 76))
-        self.unk0B.setValue(0)
+        self.unk0B.setToolTip('An unknown. Try to help us document it! Used as 3 in a few places, everywhere else is 0.')
+        self.unk0B.setValue(z.unk1)
 
+        self.unk0E = QtWidgets.QSpinBox()
+        self.unk0E.setRange(0, 255)
+        self.unk0E.setToolTip('An unknown. Try to help us document it! Used as 0, 1, 2, 3, 4, 5, 6.')
+        self.unk0E.setValue(z.cammode)       
 
-
+        InnerLayout = QtWidgets.QFormLayout()
+        InnerLayout.addRow('Unknown 0x0B:', self.unk0B)
+        InnerLayout.addRow('Unknown 0x0E:', self.unk0E)  
+        self.Unks.setLayout(InnerLayout)
+        
     def createVisibility(self, z):
         self.Visibility = QtWidgets.QGroupBox(trans.string('ZonesDlg', 19))
 
@@ -12554,145 +12565,10 @@ class BGTab(QtWidgets.QWidget):
         """
         Creates the BG Settings for BGA and BGB
         """
-        for slot in ('A', 'B'):
-            g = QtWidgets.QGroupBox(trans.string('BGDlg', 3 if slot == 'A' else 4)) # 'Scenery' or 'Backdrop'
-            exec('self.BG%sSettings = g' % slot)
-
-
-            # BG Comboboxes
-            exec("""
-            self.hex1%s = HexSpinBox()
-            self.hex2%s = HexSpinBox()
-            self.hex3%s = HexSpinBox()
-            self.name1%s = QtWidgets.QComboBox()
-            self.name2%s = QtWidgets.QComboBox()
-            self.name3%s = QtWidgets.QComboBox()
-            for box in (self.hex1%s, self.hex2%s, self.hex3%s):
-                box.setRange(0, 0xFFFF)
-            self.hex1%s.setValue(z.bg1%s)
-            self.hex2%s.setValue(z.bg2%s)
-            self.hex3%s.setValue(z.bg3%s)
-            self.hex1%s.valueChanged.connect(self.handleHexBox)
-            self.hex2%s.valueChanged.connect(self.handleHexBox)
-            self.hex3%s.valueChanged.connect(self.handleHexBox)
-            self.name1%s.activated.connect(self.handleNameBox)
-            self.name2%s.activated.connect(self.handleNameBox)
-            self.name3%s.activated.connect(self.handleNameBox)
-            for bfile_raw, bname in Bg%sNames:
-                bfile = int(bfile_raw, 16)
-                self.name1%s.addItem(trans.string('BGDlg', 17, '[name]', bname, '[hex]', '%04X' % bfile), bfile)
-                self.name2%s.addItem(trans.string('BGDlg', 17, '[name]', bname, '[hex]', '%04X' % bfile), bfile)
-                self.name3%s.addItem(trans.string('BGDlg', 17, '[name]', bname, '[hex]', '%04X' % bfile), bfile)
-                if z.bg1%s == bfile: self.name1%s.setCurrentIndex(self.name1%s.count() - 1)
-                if z.bg2%s == bfile: self.name2%s.setCurrentIndex(self.name2%s.count() - 1)
-                if z.bg3%s == bfile: self.name3%s.setCurrentIndex(self.name3%s.count() - 1)
-            """.replace('%s', slot).replace('            ', ''))
-
-
-            # Position
-            exec("""
-            self.xpos%s = QtWidgets.QSpinBox()
-            self.xpos%s.setToolTip(trans.string('BGDlg', 7))
-            self.xpos%s.setRange(-256, 255)
-            self.xpos%s.setValue(z.Xposition%s)
-
-            self.ypos%s = QtWidgets.QSpinBox()
-            self.ypos%s.setToolTip(trans.string('BGDlg', 9))
-            self.ypos%s.setRange(-255, 256)
-            self.ypos%s.setValue(-z.Yposition%s)
-            """.replace('%s', slot).replace('            ', ''))
-
-
-            # Scrolling
-            exec("""
-            self.xscroll%s = QtWidgets.QComboBox()
-            self.xscroll%s.addItems(BgScrollRateStrings)
-            self.xscroll%s.setToolTip(trans.string('BGDlg', 11))
-            if z.Xscroll%s < 0: z.Xscroll%s = 0
-            if z.Xscroll%s >= len(BgScrollRates): z.Xscroll%s = len(BgScrollRates)
-            self.xscroll%s.setCurrentIndex(z.Xscroll%s)
-
-            self.yscroll%s = QtWidgets.QComboBox()
-            self.yscroll%s.addItems(BgScrollRateStrings)
-            self.yscroll%s.setToolTip(trans.string('BGDlg', 12))
-            if z.Yscroll%s < 0: z.Yscroll%s = 0
-            if z.Yscroll%s >= len(BgScrollRates): z.Yscroll%s = len(BgScrollRates)
-            self.yscroll%s.setCurrentIndex(z.Yscroll%s)
-            """.replace('%s', slot).replace('            ', ''))
-
-
-            # Zoom
-            exec("""
-            self.zoom%s = QtWidgets.QComboBox()
-            addstr = trans.stringList('BGDlg', 15)
-            self.zoom%s.addItems(addstr)
-            self.zoom%s.setToolTip(trans.string('BGDlg', 14))
-            self.zoom%s.setCurrentIndex(z.Zoom%s)
-            """.replace('%s', slot).replace('            ', ''))
-
-
-            # Labels
-            bgLabel = QtWidgets.QLabel(trans.string('BGDlg', 19))
-            positionLabel = QtWidgets.QLabel(trans.string('BGDlg', 5))
-            scrollLabel = QtWidgets.QLabel(trans.string('BGDlg', 10))
-            alignLabel = QtWidgets.QLabel(trans.string('BGDlg', 16))
-
-
-            # Layouts
-            exec("""
-            Lpos = QtWidgets.QFormLayout()
-            Lpos.addRow(trans.string('BGDlg', 6), self.xpos%s)
-            Lpos.addRow(trans.string('BGDlg', 8), self.ypos%s)
-
-            Lscroll = QtWidgets.QFormLayout()
-            Lscroll.addRow(trans.string('BGDlg', 6), self.xscroll%s)
-            Lscroll.addRow(trans.string('BGDlg', 8), self.yscroll%s)
-
-            Lzoom = QtWidgets.QFormLayout()
-            Lzoom.addRow(trans.string('BGDlg', 13), self.zoom%s)
-            """.replace('%s', slot).replace('            ', ''))
-
-
-            exec("""
-            mainLayout = QtWidgets.QGridLayout()
-            mainLayout.addWidget(bgLabel, 0, 0, 1, 2)
-            mainLayout.addWidget(self.hex1%s, 1, 0)
-            mainLayout.addWidget(self.hex2%s, 2, 0)
-            mainLayout.addWidget(self.hex3%s, 3, 0)
-            mainLayout.addWidget(self.name1%s, 1, 1)
-            mainLayout.addWidget(self.name2%s, 2, 1)
-            mainLayout.addWidget(self.name3%s, 3, 1)
-            mainLayout.addWidget(positionLabel, 4, 0)
-            mainLayout.addLayout(Lpos, 5, 0)
-            mainLayout.addWidget(scrollLabel, 4, 1)
-            mainLayout.addLayout(Lscroll, 5, 1)
-            mainLayout.addLayout(Lzoom, 6, 0, 1, 2)
-            mainLayout.setRowStretch(7, 1)
-            self.BG%sSettings.setLayout(mainLayout)
-            """.replace('%s', slot).replace('            ', ''))
-
-
+        print('this doesn\'t work yet')
 
     def createBGViewers(self, z):
-        for slot in ('A', 'B'):
-            g = QtWidgets.QGroupBox(trans.string('BGDlg', 16)) # Preview
-            exec('self.BG%sViewer = g' % slot)
-
-            exec("""
-            self.preview1%s = QtWidgets.QLabel()
-            self.preview2%s = QtWidgets.QLabel()
-            self.preview3%s = QtWidgets.QLabel()
-            self.align%s = QtWidgets.QLabel()
-
-            mainLayout = QtWidgets.QGridLayout()
-            mainLayout.addWidget(self.preview1%s, 0, 0)
-            mainLayout.addWidget(self.preview2%s, 0, 1)
-            mainLayout.addWidget(self.preview3%s, 0, 2)
-            mainLayout.addWidget(self.align%s, 1, 0, 1, 3)
-            mainLayout.setRowStretch(2, 1)
-            self.BG%sViewer.setLayout(mainLayout)
-            """.replace('%s', slot).replace('            ', ''))
-
+        print('this doesn\'t work yet')
 
     @QtCore.pyqtSlot()
     def handleHexBox(self):
@@ -18507,7 +18383,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         elif idx == 2: CPT = 5 # entrances
         elif idx == 3: CPT = 7 # locations
         elif idx == 4: CPT = 6 # paths
-        elif idx == 5: CPT = 10 # progress paths
         elif idx == 6: CPT = -1 # events
         elif idx == 7: CPT = 8 # stamp pad
         elif idx == 8: CPT = 9 # comment
@@ -18740,18 +18615,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         if obj == self.selObj:
             SetDirty()
 
-    def HandleProgressPathPosChange(self, obj, oldx, oldy, x, y):
-        """
-        Handle the progress path being dragged
-        """
-        if oldx == x and oldy == y: return
-        obj.updatePos()
-        obj.progpathinfo['peline'].nodePosChanged()
-        obj.UpdateListItem()
-        if obj == self.selObj:
-            SetDirty()
-
-
     def HandleComPosChange(self, obj, oldx, oldy, x, y):
         """
         Handle the comment being dragged
@@ -18910,20 +18773,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         if path is None: return
 
         path.UpdateListItem(True)
-
-    @QtCore.pyqtSlot(QtWidgets.QListWidgetItem)
-    def HandleProgressPathToolTipAboutToShow(self, item):
-        """
-        Handle a progress path node being hovered in the list
-        """
-        progpath = None
-        for check in Area.progpaths:
-           if check.listitem == item:
-                progpath = check
-                break
-        if progpath is None: return
-
-        progpath.UpdateListItem(True)
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem)
     def HandleCommentSelectByList(self, item):
@@ -19400,9 +19249,8 @@ class ReggieWindow(QtWidgets.QMainWindow):
                 z.unknownbnf = 0xF if tab.Zone_boundflg.isChecked() else 0
 
                 z.music = tab.Zone_musicid.value()
-                # z.sfxmod = (tab.Zone_sfx.currentIndex() * 16)
-                # if tab.Zone_boss.isChecked():
-                #     z.sfxmod = z.sfxmod + 1
+
+                z.unk1 = tab.unk0B.value()
 
                 i = i + 1
         self.levelOverview.update()
@@ -19413,37 +19261,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         """
         Pops up the Background settings Dialog
         """
-        dlg = BGDialog()
-        if dlg.exec_() == QtWidgets.QDialog.Accepted:
-            SetDirty()
-            i = 0
-            for z in Area.zones:
-                tab = dlg.BGTabs[i]
-
-                z.XpositionA = tab.xposA.value()
-                z.YpositionA = -tab.yposA.value()
-                z.XscrollA = tab.xscrollA.currentIndex()
-                z.YscrollA = tab.yscrollA.currentIndex()
-
-                z.ZoomA = tab.zoomA.currentIndex()
-
-                z.bg1A = tab.hex1A.value()
-                z.bg2A = tab.hex2A.value()
-                z.bg3A = tab.hex3A.value()
-
-
-                z.XpositionB = tab.xposB.value()
-                z.YpositionB = -tab.yposB.value()
-                z.XscrollB = tab.xscrollB.currentIndex()
-                z.YscrollB = tab.yscrollB.currentIndex()
-
-                z.ZoomB = tab.zoomB.currentIndex()
-
-                z.bg1B = tab.hex1B.value()
-                z.bg2B = tab.hex2B.value()
-                z.bg3B = tab.hex3B.value()
-
-                i = i + 1
+        print('this doesn\'t work yet')
 
     @QtCore.pyqtSlot()
     def HandleScreenshot(self):
@@ -19566,7 +19384,7 @@ def main():
         loadSplash()
 
     global EnableAlpha, GridType, CollisionsShown, DepthShown, RealViewEnabled
-    global ObjectsFrozen, SpritesFrozen, EntrancesFrozen, LocationsFrozen, PathsFrozen, ProgressPathsFrozen, CommentsFrozen
+    global ObjectsFrozen, SpritesFrozen, EntrancesFrozen, LocationsFrozen, PathsFrozen, CommentsFrozen
     global SpritesShown, SpriteImagesShown, LocationsShown, CommentsShown
 
     gt = setting('GridType')
@@ -19581,7 +19399,6 @@ def main():
     EntrancesFrozen = setting('FreezeEntrances', False)
     LocationsFrozen = setting('FreezeLocations', False)
     PathsFrozen = setting('FreezePaths', False)
-    ProgressPathsFrozen = setting('FreezeProgressPaths', False)
     CommentsFrozen = setting('FreezeComments', False)
     SpritesShown = setting('ShowSprites', True)
     SpriteImagesShown = setting('ShowSpriteImages', True)
