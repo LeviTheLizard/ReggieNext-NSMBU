@@ -3441,7 +3441,7 @@ class Area_NSMBU(AbstractParsedArea):
         for i in range(pathcount):
             xpi = pathinfo[i]
             for j, xpj in enumerate(xpi['nodes']):
-                paths.append(PathItem(xpj['x'], xpj['y'], xpi, xpj))
+                paths.append(PathItem(xpj['x'], xpj['y'], xpi, xpj, 0, 0, 0, 0))
 
 
         self.pathdata = pathinfo
@@ -10928,7 +10928,7 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
                     nodeid = pathd['nodes'].index(newnodedata)
 
 
-                    newnode = PathItem(clickedx, clickedy, pathd, newnodedata)
+                    newnode = PathItem(clickedx, clickedy, pathd, newnodedata, 0, 0, 0, 0)
 
                     newnode.positionChanged = mw.HandlePathPosChange
                     mw.scene.addItem(newnode)
@@ -11083,7 +11083,7 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
                                    'altpath': False,
                     }
                     Area.progpathdata.append(newpathdata)
-                    newnode = ProgressPathItem(clickedx, clickedy, newpathdata, newpathdata['nodes'][0])
+                    newnode = ProgressPathItem(clickedx, clickedy, newpathdata, newpathdata['nodes'][0], 0, 0, 0, 0)
                     newnode.positionChanged = mw.HandleProgressPathPosChange
 
                     mw.scene.addItem(newnode)
