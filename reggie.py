@@ -19251,6 +19251,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
                 z.music = tab.Zone_musicid.value()
 
                 z.unk1 = tab.unk0B.value()
+                z.cammode = tab.unk0E.value()
 
                 i = i + 1
         self.levelOverview.update()
