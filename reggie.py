@@ -258,8 +258,7 @@ def FilesAreMissing():
         return True
 
     required = ['entrances.png', 'entrancetypes.txt', 'icon.png', 'levelnames.xml', 'overrides.png',
-                'spritedata.xml', 'tilesets.xml', 'bga/000A.png', 'bga.txt', 'bgb/000A.png', 'bgb.txt',
-                'about.png', 'spritecategories.xml']
+                'spritedata.xml', 'tilesets.xml', 'about.png', 'spritecategories.xml']
 
     missing = []
 
@@ -484,78 +483,7 @@ def LoadObjDescriptions(reload_=False):
         for line in raw:
             w = line.split('=')
             ObjDesc[int(w[0])] = w[1]
-
-
-BgANames = None
-def LoadBgANames(reload_=False):
-    """
-    Ensures that the background name info is loaded
-    """
-    global BgANames
-    if (BgANames is not None) and not reload_: return
-
-    paths, isPatch = gamedef.recursiveFiles('bga', True)
-    if isPatch:
-        new = []
-        new.append(trans.files['bga'])
-        for path in paths: new.append(path)
-        paths = new
-
-    BgANames = []
-    for path in paths:
-        f = open(path)
-        raw = [x.strip() for x in f.readlines()]
-        f.close()
-
-        for line in raw:
-            w = line.split('=')
-
-            found = False
-            for check in BgANames:
-                if check[0] == w[0]:
-                    check[1] = w[1]
-                    found = True
-
-            if not found: BgANames.append([w[0], w[1]])
-
-        BgANames = sorted(BgANames, key=lambda entry: int(entry[0], 16))
-
-
-BgBNames = None
-def LoadBgBNames(reload_=False):
-    """
-    Ensures that the background name info is loaded
-    """
-    global BgBNames
-    if (BgBNames is not None) and not reload_: return
-
-    paths, isPatch = gamedef.recursiveFiles('bgb', True)
-    if isPatch:
-        new = []
-        new.append(trans.files['bgb'])
-        for path in paths: new.append(path)
-        paths = new
-
-    BgBNames = []
-    for path in paths:
-        f = open(path)
-        raw = [x.strip() for x in f.readlines()]
-        f.close()
-
-        for line in raw:
-            w = line.split('=')
-
-            found = False
-            for check in BgBNames:
-                if check[0] == w[0]:
-                    check[1] = w[1]
-                    found = True
-
-            if not found: BgBNames.append([w[0], w[1]])
-
-        BgBNames = sorted(BgBNames, key=lambda entry: int(entry[0], 16))
-
-
+            
 def LoadConstantLists():
     """
     Loads some lists of constants
@@ -2999,8 +2927,6 @@ class AbstractParsedArea(AbstractArea):
         self.locations = []
         self.pathdata = []
         self.paths = []
-        self.progpathdata = []
-        self.progpaths = []
         self.comments = []
         self.layers = [[], [], []]
 
@@ -3030,8 +2956,8 @@ class AbstractParsedArea(AbstractArea):
         #     L1 = f.read()
         # with open('L2_.bin', 'rb') as f:
         #     L2 = f.read()
-        with open('block7.bin', 'wb') as f:
-            f.write(self.blocks[7])
+        #with open('block7.bin', 'wb') as f:
+        #    f.write(self.blocks[7])
         # for blocknum in range(20):
         #     try:
         #         with open('block%d_.bin' % blocknum, 'rb') as f:
@@ -3272,10 +3198,10 @@ class Area_NSMBU(AbstractParsedArea):
         Loads block 2, the general options
         """
         optdata = self.blocks[1]
-        optstruct = struct.Struct('>IxxxxHhLBBBx')
+        optstruct = struct.Struct('>xxBBxxxxxBHxBBBBxxBHH')
         offset = 0
         data = optstruct.unpack_from(optdata,offset)
-        self.defEvents, self.wrapFlag, self.timeLimit, self.unk1, self.startEntrance, self.unk2, self.unk3 = data
+        self.unk1, self.unk2, self.wrapedges, self.timelimit, self.unk3, self.unk4, self.unk5, self.unk6, self.unk7, self.unk8, self.unk9 = data
 
 
     def LoadEntrances(self):
@@ -3334,7 +3260,7 @@ class Area_NSMBU(AbstractParsedArea):
         # Block 5 - Bg data
         bgData = self.blocks[4]
         bgCount = len(bgData) // 28
-        bgStruct = struct.Struct('>HH4x16sHxx')
+        bgStruct = struct.Struct('>HxBxxxx16sHxx')
         offset = 0
         bgs = {}
         for i in range(bgCount):
@@ -3519,9 +3445,9 @@ class Area_NSMBU(AbstractParsedArea):
         """
         Saves block 2, the general options
         """
-        optstruct = struct.Struct('>IxxxxHhLBBBx')
+        optstruct = struct.Struct('>xxBBxxxxxBHxBBBBxxBHH')
         buffer = bytearray(20)
-        optstruct.pack_into(buffer, 0, self.defEvents, self.wrapFlag, self.timeLimit, self.unk1, self.startEntrance, self.unk2, self.unk3)
+        optstruct.pack_into(buffer, 0, self.unk1, self.unk2, self.wrapedges, self.timelimit, self.unk3, self.unk4, self.unk5, self.unk6, self.unk7, self.unk8, self.unk9)
         self.blocks[1] = bytes(buffer)
 
 
@@ -3651,7 +3577,7 @@ class Area_NSMBU(AbstractParsedArea):
         Saves blocks 10, 3, and 5; the zone data, boundings, and bg data respectively
         """
         bdngstruct = struct.Struct('>llllHHxxxxxxxx')
-        bgStruct = struct.Struct('>HH4x16sHxx')
+        bgStruct = struct.Struct('>HxBxxxx16sHxx')
         zonestruct = struct.Struct('>HHHHxBxBBBBBxBBxBxBBxBxx')
         offset = 0
         i = 0
@@ -7290,9 +7216,6 @@ class EntranceEditorWidget(QtWidgets.QWidget):
         QtWidgets.QWidget.__init__(self)
         self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed))
 
-        #self.CanUseFlag8 = {3, 4, 5, 6, 16, 17, 18, 19}
-        #self.CanUseFlag4 = {3, 4, 5, 6}
-
         # create widgets
         self.entranceID = QtWidgets.QSpinBox()
         self.entranceID.setRange(0, 255)
@@ -7318,37 +7241,6 @@ class EntranceEditorWidget(QtWidgets.QWidget):
         self.allowEntryCheckbox = QtWidgets.QCheckBox(trans.string('EntranceDataEditor', 8))
         self.allowEntryCheckbox.setToolTip(trans.string('EntranceDataEditor', 9))
         self.allowEntryCheckbox.clicked.connect(self.HandleAllowEntryClicked)
-
-        # self.unknownFlagCheckbox = QtWidgets.QCheckBox(trans.string('EntranceDataEditor', 10))
-        # self.unknownFlagCheckbox.setToolTip(trans.string('EntranceDataEditor', 11))
-        # self.unknownFlagCheckbox.clicked.connect(self.HandleUnknownFlagClicked)
-
-        # self.connectedPipeCheckbox = QtWidgets.QCheckBox(trans.string('EntranceDataEditor', 12))
-        # self.connectedPipeCheckbox.setToolTip(trans.string('EntranceDataEditor', 13))
-        # self.connectedPipeCheckbox.clicked.connect(self.HandleConnectedPipeClicked)
-
-        # self.connectedPipeReverseCheckbox = QtWidgets.QCheckBox(trans.string('EntranceDataEditor', 14))
-        # self.connectedPipeReverseCheckbox.setToolTip(trans.string('EntranceDataEditor', 15))
-        # self.connectedPipeReverseCheckbox.clicked.connect(self.HandleConnectedPipeReverseClicked)
-
-        # self.pathID = QtWidgets.QSpinBox()
-        # self.pathID.setRange(0, 255)
-        # self.pathID.setToolTip(trans.string('EntranceDataEditor', 17))
-        # self.pathID.valueChanged.connect(self.HandlePathIDChanged)
-
-        # self.forwardPipeCheckbox = QtWidgets.QCheckBox(trans.string('EntranceDataEditor', 18))
-        # self.forwardPipeCheckbox.setToolTip(trans.string('EntranceDataEditor', 19))
-        # self.forwardPipeCheckbox.clicked.connect(self.HandleForwardPipeClicked)
-
-        # self.activeLayer = QtWidgets.QComboBox()
-        # self.activeLayer.addItems(trans.stringList('EntranceDataEditor', 21))
-        # self.activeLayer.setToolTip(trans.string('EntranceDataEditor', 22))
-        # self.activeLayer.activated.connect(self.HandleActiveLayerChanged)
-
-        # self.cpDirection = QtWidgets.QComboBox()
-        # self.cpDirection.addItems(trans.stringList('EntranceDataEditor', 27))
-        # self.cpDirection.setToolTip(trans.string('EntranceDataEditor', 26))
-        # self.cpDirection.activated.connect(self.HandleCpDirectionChanged)
 
         self.unk05 = QtWidgets.QSpinBox()
         self.unk05.setRange(0, 255)
@@ -7401,11 +7293,6 @@ class EntranceEditorWidget(QtWidgets.QWidget):
         layout.addWidget(QtWidgets.QLabel(trans.string('EntranceDataEditor', 4)), 3, 2, 1, 1, Qt.AlignRight)
         layout.addWidget(QtWidgets.QLabel(trans.string('EntranceDataEditor', 6)), 4, 2, 1, 1, Qt.AlignRight)
 
-        #layout.addWidget(QtWidgets.QLabel(trans.string('EntranceDataEditor', 20)), 4, 0, 1, 1, Qt.AlignRight)
-
-        # self.pathIDLabel = QtWidgets.QLabel(trans.string('EntranceDataEditor', 16))
-        # self.cpDirectionLabel = QtWidgets.QLabel(trans.string('EntranceDataEditor', 25))
-
         # add the widgets
         layout.addWidget(self.entranceType, 1, 1, 1, 3)
         layout.addWidget(self.entranceID, 3, 1, 1, 1)
@@ -7432,19 +7319,6 @@ class EntranceEditorWidget(QtWidgets.QWidget):
         layout.addWidget(self.unk14, 13, 1)
         layout.addWidget(self.unk15, 14, 1)
         layout.addWidget(self.unk16, 15, 1)
-        # layout.addWidget(self.unknownFlagCheckbox, 6, 2, 1, 2)#, Qt.AlignRight)
-        # layout.addWidget(self.forwardPipeCheckbox, 7, 0, 1, 2)#, Qt.AlignRight)
-        # layout.addWidget(self.connectedPipeCheckbox, 7, 2, 1, 2)#, Qt.AlignRight)
-
-        # self.cpHorzLine = createHorzLine()
-        # layout.addWidget(self.cpHorzLine, 8, 0, 1, 4)
-        # layout.addWidget(self.connectedPipeReverseCheckbox, 9, 0, 1, 2)#, Qt.AlignRight)
-        # layout.addWidget(self.pathID, 9, 3, 1, 1)
-        # layout.addWidget(self.pathIDLabel, 9, 2, 1, 1, Qt.AlignRight)
-
-        # layout.addWidget(self.activeLayer, 4, 1, 1, 1)
-        # layout.addWidget(self.cpDirectionLabel, 10, 0, 1, 2, Qt.AlignRight)
-        # layout.addWidget(self.cpDirection, 10, 2, 1, 2)
 
         self.ent = None
         self.UpdateFlag = False
@@ -7475,27 +7349,6 @@ class EntranceEditorWidget(QtWidgets.QWidget):
         self.unk16.setValue(ent.unk16)
 
         self.allowEntryCheckbox.setChecked(((ent.entsettings & 0x80) == 0))
-        #self.unknownFlagCheckbox.setChecked(((ent.entsettings & 2) != 0))
-
-        # self.connectedPipeCheckbox.setVisible(ent.enttype in self.CanUseFlag8)
-        # self.connectedPipeCheckbox.setChecked(((ent.entsettings & 8) != 0))
-
-        # self.connectedPipeReverseCheckbox.setVisible(ent.enttype in self.CanUseFlag8 and ((ent.entsettings & 8) != 0))
-        # self.connectedPipeReverseCheckbox.setChecked(((ent.entsettings & 1) != 0))
-
-        # self.forwardPipeCheckbox.setVisible(ent.enttype in self.CanUseFlag4)
-        # self.forwardPipeCheckbox.setChecked(((ent.entsettings & 4) != 0))
-
-        # self.pathID.setVisible(ent.enttype in self.CanUseFlag8 and ((ent.entsettings & 8) != 0))
-        # self.pathID.setValue(ent.entpath)
-        # self.pathIDLabel.setVisible(ent.enttype in self.CanUseFlag8 and ((ent.entsettings & 8) != 0))
-
-        # self.cpDirection.setVisible(ent.enttype in self.CanUseFlag8 and ((ent.entsettings & 8) != 0))
-        # self.cpDirection.setCurrentIndex(ent.cpdirection)
-        # self.cpDirectionLabel.setVisible(ent.enttype in self.CanUseFlag8 and ((ent.entsettings & 8) != 0))
-        # self.cpHorzLine.setVisible(ent.enttype in self.CanUseFlag8 and ((ent.entsettings & 8) != 0))
-
-        # self.activeLayer.setCurrentIndex(ent.entlayer)
 
         self.UpdateFlag = False
 
@@ -7519,14 +7372,6 @@ class EntranceEditorWidget(QtWidgets.QWidget):
         """
         Handler for the entrance type changing
         """
-        #self.connectedPipeCheckbox.setVisible(i in self.CanUseFlag8)
-        #self.connectedPipeReverseCheckbox.setVisible(i in self.CanUseFlag8 and ((self.ent.entsettings & 8) != 0))
-        #self.pathIDLabel.setVisible(i and ((self.ent.entsettings & 8) != 0))
-        #self.pathID.setVisible(i and ((self.ent.entsettings & 8) != 0))
-        #self.cpDirection.setVisible(self.ent.enttype in self.CanUseFlag8 and ((self.ent.entsettings & 8) != 0))
-        #self.cpDirectionLabel.setVisible(self.ent.enttype in self.CanUseFlag8 and ((self.ent.entsettings & 8) != 0))
-        #self.cpHorzLine.setVisible(self.ent.enttype in self.CanUseFlag8 and ((self.ent.entsettings & 8) != 0))
-        #self.forwardPipeCheckbox.setVisible(i in self.CanUseFlag4)
         if self.UpdateFlag: return
         SetDirty()
         self.ent.enttype = i
@@ -8725,12 +8570,6 @@ def LoadGameDef(name=None, dlg=None):
             mainWindow.spriteDataEditor.update()
         if dlg: dlg.setValue(2)
 
-        # Load BgA/BgB names
-        if dlg: dlg.setLabelText(trans.string('Gamedefs', 9)) # Loading background names...
-        LoadBgANames(True)
-        LoadBgBNames(True)
-        if dlg: dlg.setValue(3)
-
         # Reload tilesets
         if dlg: dlg.setLabelText(trans.string('Gamedefs', 10)) # Reloading tilesets...
         LoadObjDescriptions(True) # reloads ts1_descriptions
@@ -9212,8 +9051,6 @@ class ReggieTranslation():
         self.translator = 'Treeki, Tempus'
 
         self.files = {
-            'bga': 'reggiedata/bga.txt',
-            'bgb': 'reggiedata/bgb.txt',
             'entrancetypes': 'reggiedata/entrancetypes.txt',
             'levelnames': 'reggiedata/levelnames.xml',
             'music': 'reggiedata/music.txt',
@@ -9268,6 +9105,12 @@ class ReggieTranslation():
                 29: 'File',
                 30: '(None)',
                 31: 'Tileset (Pa[slot]):',
+                32: 'Unknown Value 4:',
+                33: 'Unknown Value 5:',
+                34: 'Unknown Value 6:',
+                35: 'Unknown Value 7:',
+                36: 'Unknown Value 8:',
+                37: 'Unknown Value 9:',
                 },
             'AutoSaveDlg': {
                 0: 'Auto-saved backup found',
@@ -11632,43 +11475,72 @@ class LoadingTab(QtWidgets.QWidget):
     def __init__(self):
         QtWidgets.QWidget.__init__(self)
 
-        self.timer = QtWidgets.QSpinBox()
-        self.timer.setRange(0, 999)
-        self.timer.setToolTip(trans.string('AreaDlg', 4))
-        self.timer.setValue(Area.timeLimit + 200)
-
-        self.entrance = QtWidgets.QSpinBox()
-        self.entrance.setRange(0, 255)
-        self.entrance.setToolTip(trans.string('AreaDlg', 6))
-        self.entrance.setValue(Area.startEntrance)
-
-        self.wrap = QtWidgets.QCheckBox(trans.string('AreaDlg', 7))
-        self.wrap.setToolTip(trans.string('AreaDlg', 8))
-        self.wrap.setChecked((Area.wrapFlag & 1) != 0)
-
-        ##self.unk1 = QtWidgets.QSpinBox()
-        ##self.unk1.setRange(0, 0x255)
-        ##self.unk1.setToolTip(trans.string('AreaDlg', 25))
-        ##self.unk1.setValue(Area.unk1)
-
+        self.unk1 = QtWidgets.QSpinBox()
+        self.unk1.setRange(0, 0x255)
+        self.unk1.setToolTip(trans.string('AreaDlg', 25))
+        self.unk1.setValue(Area.unk1)
+        
         self.unk2 = QtWidgets.QSpinBox()
         self.unk2.setRange(0, 255)
         self.unk2.setToolTip(trans.string('AreaDlg', 25))
         self.unk2.setValue(Area.unk2)
 
+        self.wrap = QtWidgets.QCheckBox(trans.string('AreaDlg', 7))
+        self.wrap.setToolTip(trans.string('AreaDlg', 8))
+        self.wrap.setChecked((Area.wrapFlag & 1) != 0)        
+
+        self.timer = QtWidgets.QSpinBox()
+        self.timer.setRange(0, 999)
+        self.timer.setToolTip(trans.string('AreaDlg', 4))
+        self.timer.setValue(Area.timeLimit + 100)
+        
         self.unk3 = QtWidgets.QSpinBox()
-        self.unk3.setRange(0, 255)
+        self.unk3.setRange(0, 999)
         self.unk3.setToolTip(trans.string('AreaDlg', 26))
         self.unk3.setValue(Area.unk3)
 
+        self.unk4 = QtWidgets.QSpinBox()
+        self.unk4.setRange(0, 999)
+        self.unk4.setToolTip(trans.string('AreaDlg', 26))
+        self.unk4.setValue(Area.unk4)
+
+        self.unk5 = QtWidgets.QSpinBox()
+        self.unk5.setRange(0, 999)
+        self.unk5.setToolTip(trans.string('AreaDlg', 26))
+        self.unk5.setValue(Area.unk5)
+
+        self.unk6 = QtWidgets.QSpinBox()
+        self.unk6.setRange(0, 999)
+        self.unk6.setToolTip(trans.string('AreaDlg', 26))
+        self.unk6.setValue(Area.unk6)
+
+        self.unk7 = QtWidgets.QSpinBox()
+        self.unk7.setRange(0, 999)
+        self.unk7.setToolTip(trans.string('AreaDlg', 26))
+        self.unk7.setValue(Area.unk7)
+
+        self.unk8 = QtWidgets.QSpinBox()
+        self.unk8.setRange(0, 999)
+        self.unk8.setToolTip(trans.string('AreaDlg', 26))
+        self.unk8.setValue(Area.unk8)
+
+        self.unk9 = QtWidgets.QSpinBox()
+        self.unk9.setRange(0, 999)
+        self.unk9.setToolTip(trans.string('AreaDlg', 26))
+        self.unk9.setValue(Area.unk9)        
+        
         settingsLayout = QtWidgets.QFormLayout()
-        settingsLayout.addRow(trans.string('AreaDlg', 3), self.timer)
-        settingsLayout.addRow(trans.string('AreaDlg', 5), self.entrance)
-        ##settingsLayout.addRow(trans.string('AreaDlg', 22), self.unk1)
-        settingsLayout.addRow(trans.string('AreaDlg', 22), self.unk2)
-        settingsLayout.addRow(trans.string('AreaDlg', 23), self.unk3)
+        settingsLayout.addRow(trans.string('AreaDlg', 22), self.unk1)
+        settingsLayout.addRow(trans.string('AreaDlg', 23), self.unk2)
+        settingsLayout.addRow(trans.string('AreaDlg', 3), self.timer)        
+        settingsLayout.addRow(trans.string('AreaDlg', 24), self.unk3)        
+        settingsLayout.addRow(trans.string('AreaDlg', 32), self.unk4)
+        settingsLayout.addRow(trans.string('AreaDlg', 33), self.unk5)
+        settingsLayout.addRow(trans.string('AreaDlg', 34), self.unk6)
+        settingsLayout.addRow(trans.string('AreaDlg', 35), self.unk7)
+        settingsLayout.addRow(trans.string('AreaDlg', 36), self.unk8)
+        settingsLayout.addRow(trans.string('AreaDlg', 37), self.unk9)        
         settingsLayout.addRow(self.wrap)
-        # The max value of unk1 is too big for QtWidgets.QSpinBox() to handle...
 
         Layout = QtWidgets.QVBoxLayout()
         Layout.addLayout(settingsLayout)
@@ -12501,183 +12373,11 @@ class ZoneTab(QtWidgets.QWidget):
             self.Zone_presets.setCurrentIndex(0)
         self.AutoChangingSize = False
 
-
-
-#Sets up the Background Dialog
-class BGDialog(QtWidgets.QDialog):
-    """
-    Dialog which lets you choose among various from tabs
-    """
-    def __init__(self):
-        """
-        Creates and initializes the tab dialog
-        """
-        QtWidgets.QDialog.__init__(self)
-        self.setWindowTitle(trans.string('BGDlg', 0))
-        self.setWindowIcon(GetIcon('backgrounds'))
-
-        self.tabWidget = QtWidgets.QTabWidget()
-
-        i = 0
-        self.BGTabs = []
-        for z in Area.zones:
-            i = i+1
-            BGTabName = trans.string('BGDlg', 2, '[num]', i)
-            tab = BGTab(z)
-            self.BGTabs.append(tab)
-            self.tabWidget.addTab(tab, BGTabName)
-
-
-        if self.tabWidget.count() > 5:
-            for tab in range(0, self.tabWidget.count()):
-                self.tabWidget.setTabText(tab, str(tab + 1))
-
-
-        buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-
-        buttonBox.accepted.connect(self.accept)
-        buttonBox.rejected.connect(self.reject)
-
-        mainLayout = QtWidgets.QVBoxLayout()
-        mainLayout.addWidget(self.tabWidget)
-        mainLayout.addWidget(buttonBox)
-        self.setLayout(mainLayout)
-
-
-class BGTab(QtWidgets.QWidget):
-    def __init__(self, z):
-        QtWidgets.QWidget.__init__(self)
-
-        self.createBGSettings(z)
-        self.createBGViewers(z)
-
-        mainLayout = QtWidgets.QGridLayout()
-        mainLayout.addWidget(self.BGASettings, 0, 0)
-        mainLayout.addWidget(self.BGBSettings, 1, 0)
-        mainLayout.addWidget(self.BGAViewer, 0, 1)
-        mainLayout.addWidget(self.BGBViewer, 1, 1)
-        self.setLayout(mainLayout)
-
-        self.updatePreviews()
-
-
-    def createBGSettings(self, z):
-        """
-        Creates the BG Settings for BGA and BGB
-        """
-        print('this doesn\'t work yet')
-
-    def createBGViewers(self, z):
-        print('this doesn\'t work yet')
-
-    @QtCore.pyqtSlot()
-    def handleHexBox(self):
-        """
-        Handles any hex box changing
-        """
-        for slot in ('A', 'B'):
-            for boxnum in (1, 2, 3):
-                hexbox = eval('self.hex%d%s' % (boxnum, slot))
-                namebox = eval('self.name%d%s' % (boxnum, slot))
-                val = hexbox.value()
-                idx = namebox.findData(val)
-                if idx != -1:
-                    # it's a retail BG value
-                    namebox.setCurrentIndex(idx)
-                    lastEntry = namebox.itemText(namebox.count() - 1)
-                    if lastEntry == trans.string('BGDlg', 18): namebox.removeItem(namebox.count() - 1)
-                else:
-                    # it's a custom BG value
-                    lastEntry = namebox.itemText(namebox.count() - 1)
-                    if lastEntry != trans.string('BGDlg', 18): namebox.addItem(trans.string('BGDlg', 18))
-                    namebox.setCurrentIndex(namebox.count() - 1)
-        self.updatePreviews()
-
-
-    @QtCore.pyqtSlot()
-    def handleNameBox(self):
-        """
-        Handles any name box changing
-        """
-        for slot in ('A', 'B'):
-            for boxnum in (1, 2, 3):
-                hexbox = eval('self.hex%d%s' % (boxnum, slot))
-                namebox = eval('self.name%d%s' % (boxnum, slot))
-                val = namebox.itemData(namebox.currentIndex())
-                if val is None: continue # the user chose '(Custom)'
-                hexbox.setValue(val)
-        self.updatePreviews()
-
-
-    def updatePreviews(self):
-        """
-        Updates all 6 preview labels
-        """
-        scale = 0.75
-        for slot in ('A', 'B'):
-            for boxnum in (1, 2, 3):
-                val = eval('self.hex%d%s' % (boxnum, slot)).value()
-                val = '%04X' % val
-
-                filename = gamedef.bgFile(val + '.png', slot.lower())
-                if not os.path.isfile(filename):
-                    filename = 'reggiedata/bg%s/no_preview.png' % slot.lower()
-                pix = QtGui.QPixmap(filename)
-                pix = pix.scaled(pix.width() * scale, pix.height() * scale)
-                eval('self.preview%d%s' % (boxnum, slot)).setPixmap(pix)
-
-            # Alignment mode
-            box1 = eval('self.hex1%s' % slot).value()
-            box2 = eval('self.hex2%s' % slot).value()
-            box3 = eval('self.hex3%s' % slot).value()
-            alignText = trans.stringList('BGDlg', 21)[calculateBgAlignmentMode(box1, box2, box3)]
-            alignText = trans.string('BGDlg', 20, '[mode]', alignText)
-            eval('self.align%s' % slot).setText(alignText)
-
-
 def calculateBgAlignmentMode(idA, idB, idC):
     """
     Calculates alignment modes using the exact same logic as NSMBW
     """
-    # This really is RE'd ASM translated to Python, mostly
-
-    if idA <= 0x000A: idA = 0
-    if idB <= 0x000A: idB = 0
-    if idC <= 0x000A: idC = 0
-
-    if ((idA == 0) and (idB == 0)) or (idC == 0):
-        # Either both the first two are empty or the last one is empty
-        return 0
-    elif (idA == idC) and (idB == idC):
-        # They are all the same
-        return 5
-    elif (idA == idC) and (idB != idC) and (idB != 0):
-        # The first and last ones are the same, but
-        # the middle one is different (not empty, though)
-        return 1
-    elif (idC == idB) and (idA != idC) and (idA != 0):
-        # The second and last ones are the same, but
-        # the first one is different (not empty, though)
-        return 2
-    elif (idB == 0) and (idA != idC) and (idA != 0):
-        # The middle one is empty. The first and last
-        # ones are different, and the first one is not
-        # empty
-        return 3
-    elif (idA == 0) and (idB != idC) and (idB != 0):
-        # The first one is empty. The second and last
-        # ones are different, and the second one is not
-        # empty
-        return 4
-    elif (idA == idB) and (idA != 0) and (idB != 0):
-        # The first two match, and are not empty
-        return 6
-    elif (idA != 0) and (idA != 0) and (idB != 0):
-        # Every single one is not empty
-        return 7
-    else:
-        # Doesn't fit into any of the above categories
-        return 0
+    return 0
 
 
 
@@ -13517,30 +13217,6 @@ class DiagnosticToolDialog(QtWidgets.QDialog):
         """
         Checks if there are custom background IDs in this area
         """
-        global Area
-        global BgANames
-        global BgBNames
-
-        for z in Area.zones:
-            for name in ('1A', '2A', '3A', '1B', '2B', '3B'):
-                bg = eval('z.bg%s' % name)
-                id = '%04X' % bg
-                if name[1] == 'A': check = BgANames
-                else: check = BgBNames
-
-                found = False
-                for entry in check:
-                    if id in entry: found = True
-
-                if not found:
-                    if mode == 'c': return True
-                    else:
-                        if   name == '1A': z.bg1A = 1
-                        elif name == '2A': z.bg2A = 1
-                        elif name == '3A': z.bg3A = 1
-                        elif name == '1B': z.bg1B = 1
-                        elif name == '2B': z.bg2B = 1
-                        elif name == '3B': z.bg3B = 1
         return False
 
 
@@ -13620,35 +13296,7 @@ class ReggieRibbon(QRibbon):
         self.btns['pthfrz'].setChecked(PathsFrozen)
         self.btns['comfrz'].setChecked(CommentsFrozen)
 
-        return # Everything after this is old
-
-##        cGroup = RibbonGroup(trans.string('Ribbon', 5)) # Clipboard
-##        tab.cutBtn   = cGroup.addButton(mainWindow.Cut, QtGui.QKeySequence.Cut, trans.string('MenuItems', 27), False, 'cut', trans.string('MenuItems', 26))
-##        tab.copyBtn  = cGroup.addButton(mainWindow.Copy, QtGui.QKeySequence.Copy, trans.string('MenuItems', 29), False, 'copy', trans.string('MenuItems', 28))
-##        tab.pasteBtn = cGroup.addButton(mainWindow.Paste, QtGui.QKeySequence.Paste, trans.string('MenuItems', 31), True, 'paste', trans.string('MenuItems', 30))
-##        tab.cutBtn.setEnabled(False)
-##        tab.copyBtn.setEnabled(False) # nothing should be selected yet
-##
-##        fGroup = RibbonGroup(trans.string('Ribbon', 6)) # Freeze
-##
-##
-##        iGroup = RibbonGroup(trans.string('Ribbon', 7)) # Level Information
-##        iGroup.addButton(mainWindow.HandleInfo, 'Ctrl+Alt+I', trans.string('MenuItems', 13), True, 'info', trans.string('MenuItems', 12))
-##        tab.infoWidget = InfoPreviewWidget(Qt.Horizontal)
-##        iGroup.addWidget(tab.infoWidget)
-##
-##        aGroup = RibbonGroup(trans.string('Ribbon', 8)) # Area
-##        tab.areaComboBox = QtWidgets.QComboBox()
-##        tab.areaComboBox.activated.connect(mainWindow.HandleSwitchArea)
-##        aGroup.addWidget(tab.areaComboBox)
-##
-##        tab.addGroup(cGroup)
-##        tab.addGroup(fGroup)
-##        tab.addGroup(iGroup)
-##        tab.addGroup(aGroup)
-##        tab.finish()
-##
-##        return tab
+        return
 
 
     def addActionsTab(self):
@@ -13660,46 +13308,7 @@ class ReggieRibbon(QRibbon):
 
         gi, ts, mw, qk = GetIcon, trans.string, mainWindow, QtGui.QKeySequence
 
-        return # Everything after this is old
-
-##        sGroup = RibbonGroup(trans.string('Ribbon', 9)) # Selection
-##        sGroup.addButton(mainWindow.SelectAll, QtGui.QKeySequence.SelectAll, trans.string('MenuItems', 23), False, 'select', trans.string('MenuItems', 22))
-##        tab.deselBtn = sGroup.addButton(mainWindow.Deselect, 'Ctrl+D', trans.string('MenuItems', 25), False, 'deselect', trans.string('MenuItems', 24))
-##        tab.deselBtn.setEnabled(False) # nothing should be selected upon startup
-##
-##        iGroup = RibbonGroup(trans.string('Ribbon', 10)) # Items
-##        tab.shiftBtn = iGroup.addButton(mainWindow.ShiftItems, 'Ctrl+Shift+S', trans.string('MenuItems', 33), False, 'move', trans.string('MenuItems', 32))
-##        tab.mergeBtn = iGroup.addButton(mainWindow.MergeLocations, 'Ctrl+Shift+E', trans.string('MenuItems', 35), False, 'merge', trans.string('MenuItems', 34))
-##        iGroup.addButton(mainWindow.SwapObjectsTilesets, 'Ctrl+Shift+L', trans.string('MenuItems', 105), False, 'swap', trans.string('MenuItems', 104))
-##        iGroup.addButton(mainWindow.SwapObjectsTypes, 'Ctrl+Shift+Y', trans.string('MenuItems', 107), False, 'swap', trans.string('MenuItems', 106))
-##
-##        tab.shiftBtn.setEnabled(False)
-##        tab.mergeBtn.setEnabled(False)
-##
-##        LGroup = RibbonGroup(trans.string('Ribbon', 11)) # Level Settings
-##        LGroup.addButton(mainWindow.HandleAreaOptions, 'Ctrl+Alt+A', trans.string('MenuItems', 73), True, 'area', trans.string('MenuItems', 72))
-##        LGroup.addButton(mainWindow.HandleZones, 'Ctrl+Alt+Z', trans.string('MenuItems', 75), True, 'zones', trans.string('MenuItems', 74))
-##        LGroup.addButton(mainWindow.HandleBG, 'Ctrl+Alt+B', trans.string('MenuItems', 77), True, 'background', trans.string('MenuItems', 76))
-##        LGroup.addButton(mainWindow.HandleDiagnostics, 'Ctrl+Shift+D', trans.string('MenuItems', 37), True, 'diagnostics', trans.string('MenuItems', 36))
-##        LGroup.addButton(mainWindow.HandleChangeGamePath, 'Ctrl+Alt+G', trans.string('MenuItems', 17), False, 'folderpath', trans.string('MenuItems', 16))
-##        LGroup.addButton(mainWindow.HandleScreenshot, 'Ctrl+Alt+S', trans.string('MenuItems', 15), False, 'screenshot', trans.string('MenuItems', 14))
-##
-##        aGroup = RibbonGroup(trans.string('Ribbon', 12)) # Areas
-##        tab.addAreaBtn    = aGroup.addButton(mainWindow.HandleAddNewArea, 'Ctrl+Alt+N', trans.string('MenuItems', 79), True, 'add', trans.string('MenuItems', 78))
-##        tab.importAreaBtn = aGroup.addButton(mainWindow.HandleImportArea, 'Ctrl+Alt+O', trans.string('MenuItems', 81), False, 'import', trans.string('MenuItems', 80))
-##        tab.deleteAreaBtn = aGroup.addButton(mainWindow.HandleDeleteArea, 'Ctrl+Alt+D', trans.string('MenuItems', 83), False, 'delete', trans.string('MenuItems', 82))
-##
-##        tGroup = RibbonGroup(trans.string('Ribbon', 13)) # Tilesets
-##        tGroup.addButton(mainWindow.ReloadTilesets, 'Ctrl+Shift+R', trans.string('MenuItems', 85), True, 'reload', trans.string('MenuItems', 84))
-##
-##        tab.addGroup(sGroup)
-##        tab.addGroup(iGroup)
-##        tab.addGroup(LGroup)
-##        tab.addGroup(aGroup)
-##        tab.addGroup(tGroup)
-##        tab.finish()
-##
-##        return tab
+        return
 
     def addViewTab(self):
         """
@@ -18915,11 +18524,17 @@ class ReggieWindow(QtWidgets.QMainWindow):
         dlg = AreaOptionsDialog(setting('TilesetTab') != 'Old')
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
             SetDirty()
-            Area.timeLimit = dlg.LoadingTab.timer.value() - 200
-            Area.startEntrance = dlg.LoadingTab.entrance.value()
-            #Area.unk1 = dlg.LoadingTab.unk1.value()
+            Area.timeLimit = dlg.LoadingTab.timer.value() - 100
+            Area.unk1 = dlg.LoadingTab.unk1.value()
             Area.unk2 = dlg.LoadingTab.unk2.value()
             Area.unk3 = dlg.LoadingTab.unk3.value()
+            Area.unk4 = dlg.LoadingTab.unk4.value()
+            Area.unk5 = dlg.LoadingTab.unk5.value()
+            Area.unk6 = dlg.LoadingTab.unk6.value()
+            Area.unk7 = dlg.LoadingTab.unk7.value()
+            Area.unk8 = dlg.LoadingTab.unk8.value()
+            Area.unk9 = dlg.LoadingTab.unk9.value()            
+            
 
             if dlg.LoadingTab.wrap.isChecked():
                 Area.wrapFlag |= 1
@@ -19369,8 +18984,6 @@ def main():
     SetAppStyle()
     LoadTilesetNames()
     LoadObjDescriptions()
-    LoadBgANames()
-    LoadBgBNames()
     LoadSpriteData()
     LoadSpriteListData()
     LoadEntranceNames()
