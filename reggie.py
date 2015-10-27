@@ -7530,6 +7530,12 @@ class PathNodeEditorWidget(QtWidgets.QWidget):
         self.loops.setToolTip(trans.string('PathDataEditor', 1))
         self.loops.stateChanged.connect(self.HandleLoopsChanged)
 
+        self.unk1 = QtWidgets.QSpinBox()
+        self.unk1.setRange(0, 65535)
+        self.unk1.setToolTip(trans.string('PathDataEditor', 7))
+        self.unk1.valueChanged.connect(self.Handleunk1Changed)
+        self.unk1.setMaximumWidth(256)        
+
         # create a layout
         layout = QtWidgets.QGridLayout()
         self.setLayout(layout)
@@ -7544,13 +7550,15 @@ class PathNodeEditorWidget(QtWidgets.QWidget):
         layout.addWidget(QtWidgets.QLabel(trans.string('PathDataEditor', 2)), 4, 0, 1, 1, Qt.AlignRight)
         layout.addWidget(QtWidgets.QLabel(trans.string('PathDataEditor', 4)), 5, 0, 1, 1, Qt.AlignRight)
         layout.addWidget(QtWidgets.QLabel(trans.string('PathDataEditor', 6)), 6, 0, 1, 1, Qt.AlignRight)
+        layout.addWidget(QtWidgets.QLabel(trans.string('PathDataEditor', 11)), 7, 0, 1, 1, Qt.AlignRight)        
         layout.addWidget(createHorzLine(), 2, 0, 1, 2)
 
         # add the widgets
-        layout.addWidget(self.loops, 1, 1)
+        layout.addWidget(self.loops, 1, 1)      
         layout.addWidget(self.speed, 4, 1)
         layout.addWidget(self.accel, 5, 1)
         layout.addWidget(self.delay, 6, 1)
+        layout.addWidget(self.unk1, 7, 1)          
 
 
         self.path = None
@@ -7603,6 +7611,15 @@ class PathNodeEditorWidget(QtWidgets.QWidget):
         if self.UpdateFlag: return
         SetDirty()
         self.path.nodeinfo['delay'] = i
+
+    @QtCore.pyqtSlot(int)
+    def Handleunk1Changed(self, i):
+        """
+        Handler for the delay changing
+        """
+        if self.UpdateFlag: return
+        SetDirty()
+        self.path.nodeinfo['unk1'] = i        
 
 
     @QtCore.pyqtSlot(int)
@@ -9561,6 +9578,7 @@ class ReggieTranslation():
                 8: '[b]Path [id][/b]',
                 9: '[b]Node [id][/b]',
                 10: 'Modify Selected Path Node Properties',
+                11: 'Unknown 0x01:',
                 },
             'Paths': {
                 0: '[b]Path [path][/b][br]Node [node]',
@@ -9598,23 +9616,6 @@ class ReggieTranslation():
                 28: 'Use Default Tileset Picker (recommended)',
                 29: 'Use Old Tileset Picker',
                 30: 'You may need to restart Reggie! for changes to take effect.',
-                },
-            'ProgPaths': {
-                0: '[id]',
-                1: '[id]A',
-                2: '[b]Progress Path [path][/b][br]Node [node]',
-                3: '[b]Progress Path [path]A[/b][br]Node [node]',
-                4: 'Progress Path [path], Node [node]',
-                5: 'Progress Path [path]A, Node [node]',
-                },
-            'ProgPathDataEditor': {
-                0: 'Modify Selected Progress Path Node Properties',
-                1: '[b]Progress Path [id][/b]',
-                2: 'ID:',
-                3: '[b]ID:[/b][br]This is the Progress Path ID. The game puts together all progress paths from all areas and sorts them by this ID. The first progress path should have an ID of 0. Duplicate IDs are allowed if one progress path has the Alternate Path checkbox checked.',
-                4: 'Alternate Path:',
-                5: '[b]Alternate Path:[/b][br]If there are two different zones for the player to choose from, and they both end up in the same place but the player has to choose one or the other, put a Progress Path in each one, give them the same ID and check this checkbox on one of them.',
-                6: '[b]Node [id][/b]',
                 },
             'Ribbon': {
                 0: '&Home',
