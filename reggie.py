@@ -1,10 +1,10 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 
-# Reggie! - New Super Mario Bros. Wii Level Editor
-# Version Next Milestone 2 Alpha 4
-# Copyright (C) 2009-2014 Treeki, Tempus, angelsl, JasonP27, Kamek64,
-# MalStar1000, RoadrunnerWMC
+# Reggie! - New Super Mario Bros. U Level Editor
+# Version v0.3 ALPHA
+# Copyright (C) 2009-2015 Treeki, Tempus, angelsl, JasonP27, Kamek64,
+# MalStar1000, RoadrunnerWMC, MrRean
 
 # This file is part of Reggie!.
 
@@ -100,22 +100,13 @@ settings = None
 
 
 # Game enums
-NewSuperMarioBros = 0
-NewSuperMarioBrosWii = 1
-NewSuperMarioBros2 = 2
-NewSuperMarioBrosU = 3
-NewSuperLuigiU = 4
+NewSuperMarioBrosU = 0
+NewSuperLuigiU = 1
 FileExtentions = {
-    NewSuperMarioBros: (),
-    NewSuperMarioBrosWii: ('.arc', '.arc.LH'),
-    NewSuperMarioBros2: ('.szs',),
     NewSuperMarioBrosU: ('.szs',),
     NewSuperLuigiU: ('.szs',),
     }
 FirstLevels = {
-    NewSuperMarioBros: '',
-    NewSuperMarioBrosWii: '01-01',
-    NewSuperMarioBros2: '1-1',
     NewSuperMarioBrosU: '1-1',
     NewSuperLuigiU: '1-1',
     }
@@ -2406,7 +2397,6 @@ SpritesFrozen = False
 EntrancesFrozen = False
 LocationsFrozen = False
 PathsFrozen = False
-ProgressPathsFrozen = False
 CommentsFrozen = False
 PaintingEntrance = None
 PaintingEntranceListIndex = None
@@ -8676,8 +8666,6 @@ class ReggieGameDefinition():
         self.sprites = sprites
 
         self.files = {
-            'bga': gdf(None, False),
-            'bgb': gdf(None, False),
             'entrancetypes': gdf(None, False),
             'levelnames': gdf(None, False),
             'music': gdf(None, False),
@@ -11930,28 +11918,22 @@ class ZonesDialog(QtWidgets.QDialog):
 
     @QtCore.pyqtSlot()
     def NewZone(self):
-        print('does not work right now')
-##        if len(self.zoneTabs) >= 8:
-##            result = QtWidgets.QMessageBox.warning(self, trans.string('ZonesDlg', 6), trans.string('ZonesDlg', 7), QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-##            if result == QtWidgets.QMessageBox.No:
-##                return
-##
-##        a = []
-##        b = []
-##
-##        a.append([0, 0, 0, 0, 0, 0])
-##        b.append([0, 0, 0, 0, 0, 10, 10, 10, 0])
-##        id = len(self.zoneTabs)
-##        z = ZoneItem(256, 256, 448, 224, 0, 0, id, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-##        ZoneTabName = trans.string('ZonesDlg', 3, '[num]', id+1)
-##        tab = ZoneTab(z)
-##        self.zoneTabs.append(tab)
-##        self.tabWidget.addTab(tab, ZoneTabName)
-##        if self.tabWidget.count() > 5:
-##            for tab in range(0, self.tabWidget.count()):
-##                self.tabWidget.setTabText(tab, str(tab + 1))
+        if len(self.zoneTabs) >= 8:
+            result = QtWidgets.QMessageBox.warning(self, trans.string('ZonesDlg', 6), trans.string('ZonesDlg', 7), QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+            if result == QtWidgets.QMessageBox.No:
+                return
 
-        #self.NewButton.setEnabled(len(self.zoneTabs) < 8)
+        id = len(self.zoneTabs)
+        z = ZoneItem(256, 256, 448, 224, 0, 0, id, 0, 0, 0, 0, 0, 0, 0, 0, 0, (0, 0, 0, 0, 0, 0), (0, 0, b'', 0), id)
+        ZoneTabName = trans.string('ZonesDlg', 3, '[num]', id+1)
+        tab = ZoneTab(z)
+        self.zoneTabs.append(tab)
+        self.tabWidget.addTab(tab, ZoneTabName)
+        if self.tabWidget.count() > 5:
+            for tab in range(0, self.tabWidget.count()):
+                self.tabWidget.setTabText(tab, str(tab + 1))
+
+        self.NewButton.setEnabled(len(self.zoneTabs) < 8)
 
 
     @QtCore.pyqtSlot()
@@ -12751,101 +12733,7 @@ class DiagnosticToolDialog(QtWidgets.QDialog):
                 mainWindow.scene.removeItem(obj)
 
             mainWindow.levelOverview.update()
-
-
-    def CrashSprites(self, mode='f'):
-        """
-        Checks if there are any sprites which are known to be crashy and cause problems often
-        """
-        global Area
-        problems = (0,1,2,3,4,5,6,7,8,9, # glitch sprites
-                    121, # en reverse
-                    475) # will crash if you use a looped path
-
-        founds = []
-        for sprite in Area.sprites:
-            if sprite.type in problems: founds.append(sprite)
-
-        if mode == 'c': return len(founds) != 0
-        else:
-            for sprite in founds:
-                sprite.delete()
-                sprite.setSelected(False)
-                mainWindow.scene.removeItem(sprite)
-                mainWindow.levelOverview.update()
-
-
-    def CrashSpriteSettings(self, mode='f'):
-        """
-        Checks for sprite settings which are known to cause major glitches and crashes
-        """
-        global Area
-
-        checkfor = []
-        problem = False
-        for sprite in Area.sprites:
-            # ask somebody about 153 for clarification, the add it to the fixers
-            if sprite.type == 166 and (ord(sprite.spritedata[2]) & 0xF0) >> 4 == 4: problem = True
-            #           also double-check nyb10, then add it to the fixers
-            if sprite.type == 171 and ord(sprite.spritedata[4]) & 0xF != 1: problem = True
-            if sprite.type == 203 and ord(sprite.spritedata[4]) & 0xF == 1:
-                if [454, 432] not in checkfor: checkfor.append([454, 432])
-            if sprite.type == 247 and ord(sprite.spritedata[5]) & 0xF == 1: problem = True
-            if sprite.type == 323:
-                if ord(sprite.spritedata[4]) & 0xF == 4: problem = True
-                if ord(sprite.spritedata[2]) & 0xF < (ord(sprite.spritedata[3]) & 0xF0) >> 4: problem = True
-            if sprite.type == 449 and (ord(sprite.spritedata[5]) & 0xF0) >> 4 == 1: problem = True
-            if sprite.type == 479 and ord(sprite.spritedata[4]) & 0xF == 1: problem = True
-            if sprite.type == 481:
-                if ord(sprite.spritedata[5]) & 0xF > 2: problem = True
-                if [419] not in checkfor: checkfor.append([419])
-
-        # check for sprites which are depended on by other sprites
-        new = list(checkfor)
-        for item in checkfor:
-            for sprite in Area.sprites:
-                if sprite.type in item:
-                    try: new.remove(item)
-                    except Exception: pass # probably already removed it
-        checkfor = new
-        if len(checkfor) > 0: problem = True
-
-        if mode == 'c': return problem
-        elif problem:
-            addsprites = []
-            for sprite in Area.sprites:
-                # :(
-                if sprite.type == 166 and (ord(sprite.spritedata[2]) & 0xF0) >> 4 == 4: sprite.spritedata = sprite.spritedata[0:2]+' '+sprite.spritedata[3:]
-                if sprite.type == 171 and ord(sprite.spritedata[4]) & 0xF != 1: sprite.spritedata = sprite.spritedata[0:4]+chr(1)+sprite.spritedata[5:]
-                if sprite.type == 203 and ord(sprite.spritedata[4]) & 0xF == 1:
-                    if [454, 432] in checkfor:
-                        addsprites.append((454, sprite.objx-128, sprite.objy-128))
-                if sprite.type == 247 and ord(sprite.spritedata[5]) & 0xF == 1: sprite.spritedata = sprite.spritedata[0:5]+chr(0)+sprite.spritedata[6:]
-                if sprite.type == 323:
-                    if ord(sprite.spritedata[4]) & 0xF == 4: sprite.spritedata = sprite.spritedata[0:4]+chr(1)+sprite.spritedata[5:]
-                    if ord(sprite.spritedata[2]) & 0xF < (ord(sprite.spritedata[3]) & 0xF0) >> 4:
-                        sprite.spritedata = sprite.spritedata[0:2] + chr((ord(sprite.spritedata[3]) & 0xF0) >> 4)+sprite.spritedata[3:]
-                if sprite.type == 449 and (ord(sprite.spritedata[5]) & 0xF0) >> 4 == 1: sprite.spritedata = sprite.spritedata[0:5]+chr(0)+sprite.spritedata[6:]
-                if sprite.type == 479 and ord(sprite.spritedata[4]) & 0xF == 1:
-                    if (ord(sprite.spritedata[4]) & 0xF0) >> 4 == 1: sprite.spritedata = sprite.spritedata[0:4]+chr(0x10)+sprite.spritedata[5:]
-                    else: sprite.spritedata = sprite.spritedata[0:4]+chr(0)+sprite.spritedata[5:]
-                if sprite.type == 481:
-                    if ord(sprite.spritedata[5]) & 0xF > 2: sprite.spritedata = sprite.spritdata[0:5]+chr(2)+sprite.spritedata[6:]
-                    addsprites.append((419, sprite.objx-128, sprite.objy-128))
-
-            for id, x, y in addsprites:
-                new = SpriteItem(id, x, y, '\0\0\0\0\0\0\0\0\0\0')
-                new.positionChanged = mainWindow.HandleSprPosChange
-                mainWindow.scene.addItem(new)
-
-                new.listitem = ListWidgetItem_SortsByOther(new)
-                mainWindow.spriteList.addItem(new.listitem)
-                Area.sprites.append(new)
-                mainWindow.scene.update()
-
-                new.UpdateListItem()
-
-
+            
     def TooManySprites(self, mode='f'):
         """
         Determines if the # of sprites in the current area is > max
@@ -13352,34 +13240,7 @@ class ReggieRibbon(QRibbon):
         self.btns['showcoms'].setChecked(CommentsShown)
         self.btns['realview'].setChecked(RealViewEnabled)
 
-        return # Everything after this is old
-
-##        TGroup = RibbonGroup(trans.string('Ribbon', 13)) # Tilesets
-##        tab.L0Btn = TGroup.addButton(mainWindow.HandleUpdateLayer0, 'Ctrl+1', trans.string('MenuItems', 49), True, 'layer0', trans.string('MenuItems', 48), True, True)
-##        tab.L1Btn = TGroup.addButton(mainWindow.HandleUpdateLayer1, 'Ctrl+2', trans.string('MenuItems', 51), True, 'layer1', trans.string('MenuItems', 50), True, True)
-##        tab.L2Btn = TGroup.addButton(mainWindow.HandleUpdateLayer2, 'Ctrl+3', trans.string('MenuItems', 53), True, 'layer2', trans.string('MenuItems', 52), True, True)
-##        tab.TileAnimBtn = TGroup.addButton(mainWindow.HandleTilesetAnimToggle, 'Ctrl+7', trans.string('MenuItems', 109) , True, 'animation', trans.string('MenuItems', 108), True, False)
-##
-##        iGroup = RibbonGroup(trans.string('Ribbon', 15)) # Visibility
-##        tab.ShowSpritesBtn = iGroup.addButton(mainWindow.HandleSpritesVisibility, 'Ctrl+4', trans.string('MenuItems', 55), False, 'sprites', trans.string('MenuItems', 54), True, SpritesShown)
-##        tab.ShowSpriteImgsBtn = iGroup.addButton(mainWindow.HandleSpriteImages, 'Ctrl+6', trans.string('MenuItems', 57), False, 'sprites', trans.string('MenuItems', 56), True, not SpriteImagesShown)
-##        tab.ShowLocsBtn = iGroup.addButton(mainWindow.HandleLocationsVisibility, 'Ctrl+5', trans.string('MenuItems', 59), True, 'locations', trans.string('MenuItems', 58), True, not LocationsShown)
-##        iGroup.addButton(mainWindow.HandleSwitchGrid, 'Ctrl+G', trans.string('MenuItems', 61), True, 'grid', trans.string('MenuItems', 60))
-##
-##        zGroup = RibbonGroup(trans.string('Ribbon', 16)) # Zoom
-##        tab.zoomInBtn =     zGroup.addButton(mainWindow.HandleZoomIn, QtGui.QKeySequence.ZoomIn, trans.string('MenuItems', 65), False, 'zoomin', trans.string('MenuItems', 64))
-##        tab.zoomMaxBtn =    zGroup.addButton(mainWindow.HandleZoomMax, 'Ctrl+PgDown', trans.string('MenuItems', 63), False, 'zoommax', trans.string('MenuItems', 62))
-##        tab.zoomActualBtn = zGroup.addButton(mainWindow.HandleZoomActual, 'Ctrl+0', trans.string('MenuItems', 67), True, 'zoomactual', trans.string('MenuItems', 66))
-##        tab.zoomOutBtn =    zGroup.addButton(mainWindow.HandleZoomOut, QtGui.QKeySequence.ZoomOut, trans.string('MenuItems', 69), False, 'zoomout', trans.string('MenuItems', 68))
-##        tab.zoomMinBtn =    zGroup.addButton(mainWindow.HandleZoomMin, 'Ctrl+PgUp', trans.string('MenuItems', 71), False, 'zoommin', trans.string('MenuItems', 70))
-##
-##        tab.addGroup(TGroup)
-##        tab.addGroup(iGroup)
-##        tab.addGroup(zGroup)
-##        # tab.finish() is called later, after adding palette and overview buttons
-##
-##        return tab
-
+        return
 
     def addOverview(self, dock, act):
         """
@@ -13494,68 +13355,6 @@ class ReggieRibbonFileMenu(QFileMenu):
         self.addSeparator()
         c = self.addButton(gi('delete', True), trans.string('MenuItems', 20), mw.HandleExit, qk.Quit, trans.string('MenuItems', 21))
         self.btns['lvlinfo'], self.btns['prefs'], self.btns['exit'] = a, b, c
-
-##        # create a left-column layout
-##        leftLayout = QtWidgets.QVBoxLayout()
-##        leftLayout.addWidget(a)
-##        leftLayout.addWidget(b)
-##        leftLayout.addWidget(c)
-##        leftLayout.addWidget(d)
-##        leftLayout.addWidget(e)
-##
-##        # create the Info Preview Widget
-##        self.InfoWidget = InfoPreviewWidget(Qt.Vertical)
-##        L = QtWidgets.QVBoxLayout()
-##        L.addWidget(self.InfoWidget)
-##        InfoBox = QtWidgets.QGroupBox(trans.string('InfoDlg', 0)) # 'Level Information'
-##        InfoBox.setLayout(L)
-##
-##        # create the Recent Files group
-##        recentGroup = QtWidgets.QGroupBox(trans.string('MenuItems', 6)) # 'Recent Files'
-##        RL = QtWidgets.QVBoxLayout()
-##        RL.addWidget(mainWindow.RecentMenu)
-##        RL.addStretch(1)
-##        recentGroup.setLayout(RL)
-##
-##        # create a bottom buttons layout
-##        prefsButton = QtWidgets.QPushButton(GetIcon('settings'), trans.string('MenuItems', 18)) # Reggie! Preferences
-##        prefsButton.clicked.connect(mainWindow.HandlePreferences)
-##        prefsButton.setToolTip(trans.string('MenuItems', 19))
-##        s = QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Alt+P'), mainWindow)
-##        s.activated.connect(mainWindow.HandlePreferences)
-##        self.setButtonColor(prefsButton)
-##        exitButton = QtWidgets.QPushButton(GetIcon('delete'), trans.string('MenuItems', 20)) # Exit Reggie!
-##        exitButton.clicked.connect(mainWindow.HandleExit)
-##        exitButton.setToolTip(trans.string('MenuItems', 21))
-##        s = QtGui.QShortcut(QtGui.QKeySequence.Quit, mainWindow)
-##        s.activated.connect(mainWindow.HandleExit)
-##        self.setButtonColor(exitButton)
-##        bottomButtonsLayout = QtWidgets.QHBoxLayout()
-##        bottomButtonsLayout.addStretch(1)
-##        bottomButtonsLayout.addWidget(prefsButton)
-##        bottomButtonsLayout.addWidget(exitButton)
-##
-##        # create a top layout
-##        self.topLayout = QtWidgets.QGridLayout()
-##        self.topLayout.addLayout(leftLayout, 0, 0)
-##        self.topLayout.addWidget(InfoBox, 1, 0)
-##        self.topLayout.addWidget(recentGroup, 0, 1, 3, 1)
-##        self.topLayout.addLayout(bottomButtonsLayout,  3, 0, 1, 2)
-##        self.topLayout.setRowStretch(2, 1)
-##
-##        # create a bottom (watermark) layout
-##        bottomLayout = QtWidgets.QGridLayout()
-##        v = self.getWatermark()
-##        if v is not None:
-##            w = QtWidgets.QLabel()
-##            w.setPixmap(v)
-##            bottomLayout.addWidget(w, 0, 0, 1, 1, Qt.AlignBottom | Qt.AlignRight)
-##
-##        # create a main layout
-##        self.mainLayout = QtWidgets.QGridLayout()
-##        self.mainLayout.addLayout(bottomLayout, 0, 0)
-##        self.mainLayout.addLayout(self.topLayout, 0, 0)
-##        self.setLayout(self.mainLayout)
 
     def handleRecentFileClicked(self, path):
         """

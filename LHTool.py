@@ -1,10 +1,10 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 
-# Reggie! - New Super Mario Bros. Wii Level Editor
-# Version Next Milestone 2 Alpha 4
-# Copyright (C) 2009-2014 Treeki, Tempus, angelsl, JasonP27, Kamek64,
-# MalStar1000, RoadrunnerWMC
+# Reggie! - New Super Mario Bros. U Level Editor
+# Version v0.3 ALPHA
+# Copyright (C) 2009-2015 Treeki, Tempus, angelsl, JasonP27, Kamek64,
+# MalStar1000, RoadrunnerWMC, MrRean
 
 # This file is part of Reggie!.
 
