@@ -3333,7 +3333,7 @@ class Area_NSMBU(AbstractParsedArea):
         # Path struct: >BBHHxBxxxx
         pathdata = self.blocks[13]
         pathcount = len(pathdata) // 12
-        pathstruct = struct.Struct('>BBHHxBxxxx') # updated struct -- MrRean
+        pathstruct = struct.Struct('>BbHHxBxxxx') # updated struct -- MrRean
         offset = 0
         unpack = pathstruct.unpack_from
         pathinfo = []
@@ -3479,7 +3479,7 @@ class Area_NSMBU(AbstractParsedArea):
         """
         Saves the paths back to block 13
         """
-        pathstruct = struct.Struct('>BBHHxBxxxx')
+        pathstruct = struct.Struct('>BbHHxBxxxx')
         nodecount = 0
         for path in self.pathdata:
             nodecount += len(path['nodes'])
@@ -7531,7 +7531,7 @@ class PathNodeEditorWidget(QtWidgets.QWidget):
         self.loops.stateChanged.connect(self.HandleLoopsChanged)
 
         self.unk1 = QtWidgets.QSpinBox()
-        self.unk1.setRange(0, 65535)
+        self.unk1.setRange(-127, 127)
         self.unk1.setToolTip(trans.string('PathDataEditor', 7))
         self.unk1.valueChanged.connect(self.Handleunk1Changed)
         self.unk1.setMaximumWidth(256)        
@@ -7629,104 +7629,7 @@ class PathNodeEditorWidget(QtWidgets.QWidget):
         self.path.pathinfo['loops'] = (i == Qt.Checked)
         self.path.pathinfo['peline'].loops = (i == Qt.Checked)
         mainWindow.scene.update()
-
-
-
-class ProgressPathNodeEditorWidget(QtWidgets.QWidget):
-    """
-    Widget for editing progress path node properties
-    """
-
-    def __init__(self, defaultmode=False):
-        """
-        Constructor
-        """
-        QtWidgets.QWidget.__init__(self)
-        self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed))
-
-        # create widgets
-        self.progpathid = QtWidgets.QSpinBox()
-        self.progpathid.setRange(1, 255) # ID 0 is not allowed in NSMBU
-        self.progpathid.setToolTip(trans.string('ProgPathDataEditor', 3))
-        self.progpathid.valueChanged.connect(self.HandleIDChanged)
-        self.progpathid.setMaximumWidth(256)
-
-        self.altpath = QtWidgets.QCheckBox()
-        self.altpath.setToolTip(trans.string('ProgPathDataEditor', 5))
-        self.altpath.stateChanged.connect(self.HandleAltPathChanged)
-
-        # create a layout
-        layout = QtWidgets.QGridLayout()
-        self.setLayout(layout)
-
-        # 'Editing Progress Path #' label
-        self.editingProgPathLabel = QtWidgets.QLabel('-')
-        self.editingNodeLabel = QtWidgets.QLabel('-')
-        layout.addWidget(self.editingProgPathLabel, 0, 0, 1, 2, Qt.AlignTop)
-        layout.addWidget(self.editingNodeLabel, 4, 0, 1, 2, Qt.AlignTop)
-
-        # add labels
-        layout.addWidget(QtWidgets.QLabel(trans.string('ProgPathDataEditor', 2)), 1, 0, 1, 1, Qt.AlignRight)
-        layout.addWidget(QtWidgets.QLabel(trans.string('ProgPathDataEditor', 4)), 2, 0, 1, 1, Qt.AlignRight)
-        layout.addWidget(createHorzLine(), 3, 0, 1, 2)
-
-        # add the widgets
-        layout.addWidget(self.progpathid, 1, 1)
-        layout.addWidget(self.altpath, 2, 1)
-
-
-        self.progpath = None
-        self.UpdateFlag = False
-
-
-    def setProgPath(self, progpath):
-        """
-        Change the progress path being edited by the editor, update all fields
-        """
-        if self.progpath == progpath: return
-        self.editingProgPathLabel.setText(trans.string('ProgPathDataEditor', 1, '[id]', progpath.progpathid))
-        self.editingNodeLabel.setText(trans.string('ProgPathDataEditor', 6, '[id]', progpath.nodeid))
-        self.progpath = progpath
-        self.UpdateFlag = True
-
-        self.progpathid.setValue(progpath.progpathinfo['id'])
-        self.altpath.setChecked(progpath.progpathinfo['altpath'])
-
-        self.UpdateFlag = False
-
-
-    @QtCore.pyqtSlot(int)
-    def HandleIDChanged(self, i):
-        """
-        Handler for the ID changing
-        """
-        if self.UpdateFlag: return
-        SetDirty()
-
-        # This affects ALL nodes in the progpath, so update them accordingly
-        for nodedata in self.progpath.progpathinfo['nodes']:
-            node = nodedata['graphicsitem']
-            node.progpathinfo['id'] = i
-            node.progpathid = i
-            node.update()
-            node.UpdateTooltip()
-            node.UpdateListItem()
-
-
-    @QtCore.pyqtSlot(int)
-    def HandleAltPathChanged(self, i):
-        if self.UpdateFlag: return
-        SetDirty()
-        self.progpath.progpathinfo['altpath'] = (i == Qt.Checked)
-
-        # This affects ALL nodes in the progpath, so update them accordingly
-        for nodedata in self.progpath.progpathinfo['nodes']:
-            node = nodedata['graphicsitem']
-            node.update()
-            node.UpdateTooltip()
-            node.UpdateListItem()
-
-
+        
 class IslandGeneratorWidget(QtWidgets.QWidget):
     """
     Widget for editing entrance properties
@@ -8304,11 +8207,6 @@ class ReggieTheme():
             'path_fill_s':             QtGui.QColor(6,249,20,240),    # Selected path node fill
             'path_lines':              QtGui.QColor(0,0,0),           # Unselected path node lines
             'path_lines_s':            QtGui.QColor(255,255,255),     # Selected path node lines
-            'progpath_connector':      QtGui.QColor(255,96,0),        # Progress path node connecting lines
-            'progpath_fill':           QtGui.QColor(255,96,0,120),    # Unselected progress path node fill
-            'progpath_fill_s':         QtGui.QColor(255,96,0,240),    # Selected progress path node fill
-            'progpath_lines':          QtGui.QColor(0,0,0),           # Unselected progress path node lines
-            'progpath_lines_s':        QtGui.QColor(255,255,255),     # Selected progress path node lines
             'smi':                     QtGui.QColor(255,255,255,80),  # Sprite movement indicator
             'sprite_fill_s':           QtGui.QColor(255,255,255,64),  # Selected sprite w/ image fill
             'sprite_lines_s':          QtGui.QColor(255,255,255),     # Selected sprite w/ image lines
@@ -10736,7 +10634,7 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
                         obj.objy = clickedy
                         obj.setPos(int((clickedx+obj.ImageObj.xOffset) * TileWidth / 16), int((clickedy+obj.ImageObj.yOffset) * TileWidth / 16))
 
-                elif isinstance(obj, type_ent) or isinstance(obj, type_path) or isinstance(obj, type_progpath) or isinstance(obj, type_com):
+                elif isinstance(obj, type_ent) or isinstance(obj, type_path) or isinstance(obj, type_com):
                     # move the created entrance/path/comment
                     clicked = mainWindow.view.mapToScene(event.x(), event.y())
                     if clicked.x() < 0: clicked.setX(0)
@@ -16977,28 +16875,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
 
         setSetting('FreezePaths', PathsFrozen)
         self.scene.update()
-
-
-    @QtCore.pyqtSlot(bool)
-    def HandleProgressPathsFreeze(self, checked):
-        """
-        Handle toggling of progress paths being frozen
-        """
-        global ProgressPathsFrozen
-
-        ProgressPathsFrozen = checked
-        flag1 = QtWidgets.QGraphicsItem.ItemIsSelectable
-        flag2 = QtWidgets.QGraphicsItem.ItemIsMovable
-
-        if Area is not None:
-            for node in Area.progpaths:
-                node.setFlag(flag1, not ProgressPathsFrozen)
-                node.setFlag(flag2, not ProgressPathsFrozen)
-
-        setSetting('FreezeProgressPaths', ProgressPathsFrozen)
-        self.scene.update()
-
-
+        
     @QtCore.pyqtSlot(bool)
     def HandleCommentsFreeze(self, checked):
         """
@@ -17676,14 +17553,12 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.stampAddBtn.setEnabled(len(selitems) > 0)
 
 
-
         # count the # of each type, for the statusbar label
         spr = 0
         ent = 0
         obj = 0
         loc = 0
         path = 0
-        progpath = 0
         com = 0
         for item in selitems:
             if func_ii(item, type_spr): spr += 1
@@ -17691,7 +17566,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
             elif func_ii(item, type_obj): obj += 1
             elif func_ii(item, type_loc): loc += 1
             elif func_ii(item, type_path): path += 1
-            elif func_ii(item, type_progpath): progpath += 1
             elif func_ii(item, type_com): com += 1
 
         if loc > 2:
