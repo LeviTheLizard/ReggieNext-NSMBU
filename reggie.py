@@ -13849,11 +13849,11 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.CurrentSelection = []
 
         self.CurrentGame = setting('CurrentGame')
-        if self.CurrentGame is None: self.CurrentGame = NewSuperMarioBros2
+        if self.CurrentGame is None: self.CurrentGame = NewSuperMarioBrosU
 
         # set up the window
         QtWidgets.QMainWindow.__init__(self, None)
-        self.setWindowTitle('Reggie! Level Editor Next')
+        self.setWindowTitle('Reggie! NSMBU Editor')
         self.setWindowIcon(QtGui.QIcon('reggiedata/icon.png'))
         self.setIconSize(QtCore.QSize(16, 16))
 
@@ -13982,7 +13982,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         #self.CreateAction('save', self.HandleSave, GetIcon('save'), trans.string('MenuItems', 8), trans.string('MenuItems', 9), QtGui.QKeySequence.Save)
         self.CreateAction('saveas', self.HandleSaveAs, GetIcon('saveas'), trans.string('MenuItems', 10), trans.string('MenuItems', 11), QtGui.QKeySequence.SaveAs)
         self.CreateAction('metainfo', self.HandleInfo, GetIcon('info'), trans.string('MenuItems', 12), trans.string('MenuItems', 13), QtGui.QKeySequence('Ctrl+Alt+I'))
-        self.CreateAction('changegamedef', None, GetIcon('game'), trans.string('MenuItems', 98), trans.string('MenuItems', 99), None)
         self.CreateAction('screenshot', self.HandleScreenshot, GetIcon('screenshot'), trans.string('MenuItems', 14), trans.string('MenuItems', 15), QtGui.QKeySequence('Ctrl+Alt+S'))
         self.CreateAction('changegamepath', self.HandleChangeGamePath, GetIcon('folderpath'), trans.string('MenuItems', 16), trans.string('MenuItems', 17), QtGui.QKeySequence('Ctrl+Alt+G'))
         self.CreateAction('preferences', self.HandlePreferences, GetIcon('settings'), trans.string('MenuItems', 18), trans.string('MenuItems', 19), QtGui.QKeySequence('Ctrl+Alt+P'))
@@ -14043,7 +14042,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
 
         # Configure them
         self.actions['openrecent'].setMenu(self.RecentMenu)
-        self.actions['changegamedef'].setMenu(self.GameDefMenu)
 
         self.actions['collisions'].setChecked(CollisionsShown)
         self.actions['depth'].setChecked(DepthShown)
@@ -14085,7 +14083,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         fmenu.addAction(self.actions['saveas'])
         fmenu.addAction(self.actions['metainfo'])
         fmenu.addSeparator()
-        fmenu.addAction(self.actions['changegamedef'])
         fmenu.addAction(self.actions['screenshot'])
         fmenu.addAction(self.actions['changegamepath'])
         fmenu.addAction(self.actions['preferences'])
@@ -14783,7 +14780,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         """
         Sets the window title accordingly
         """
-        self.setWindowTitle('Reggie! Level Editor Next - %s%s' % (self.fileTitle, (' ' + trans.string('MainWindow', 0)) if Dirty else ''))
+        self.setWindowTitle('Reggie! NSMBU Editor - %s%s' % (self.fileTitle, (' ' + trans.string('MainWindow', 0)) if Dirty else ''))
 
     def CheckDirty(self):
         """
@@ -15657,7 +15654,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         path = None
         #while not isValidGamePath(path):
         global CurrentGame
-        CurrentGame = NewSuperMarioBros2
+        CurrentGame = NewSuperMarioBrosU
         path = QtWidgets.QFileDialog.getExistingDirectory(None, trans.string('ChangeGamePath', 0, '[game]', gamedef.name))
         if path == '':
             return False
