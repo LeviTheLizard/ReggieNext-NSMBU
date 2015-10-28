@@ -9608,7 +9608,7 @@ class ReggieTranslation():
                 4: 'New',
                 5: 'Delete',
                 6: 'Warning',
-                7: 'You are trying to add more than 8 zones to a level - keep in mind that without the proper fix to the game, this will cause your level to [b]crash[/b] or have other strange issues![br][br]Are you sure you want to do this?',
+                7: 'You are trying to add more than 15 zones to a level - keep in mind that without the proper fix to the game, this will cause your level to [b]crash[/b] or have other strange issues![br][br]Are you sure you want to do this?',
                 8: 'Dimensions',
                 9: 'X position:',
                 10: '[b]X position:[/b][br]Sets the X Position of the upper left corner',
@@ -11730,7 +11730,7 @@ class ZonesDialog(QtWidgets.QDialog):
 
     @QtCore.pyqtSlot()
     def NewZone(self):
-        if len(self.zoneTabs) >= 8:
+        if len(self.zoneTabs) >= 15:
             result = QtWidgets.QMessageBox.warning(self, trans.string('ZonesDlg', 6), trans.string('ZonesDlg', 7), QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
             if result == QtWidgets.QMessageBox.No:
                 return
@@ -16328,7 +16328,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         global levName; levName=name.replace('\\', '/').split('/')[-1]
 
         if game is None:
-            game = self.CurrentGame
+            game = NewSuperMarioBrosU
 
         # Get the file path, if possible
         if name is not None:
