@@ -114,8 +114,9 @@ class ReggieTranslation():
                 33: 'Unknown Value 5:',
                 34: 'Unknown Value 6:',
                 35: 'Unknown Value 7:',
-                36: 'Unknown Value 8:',
-                37: 'Unknown Value 9:',
+                36: 'Time Limit 2:',
+                37: 'Time Limit 3:',
+                38: '[b]Time Limit 2 & 3:[/b]This time limit is chosen by the nybble 12 on sprite 25, Midway Point Flag. See sprite for details.',                
                 },
             'AutoSaveDlg': {
                 0: 'Auto-saved backup found',

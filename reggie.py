@@ -3154,7 +3154,7 @@ class Area_NSMBU(AbstractParsedArea):
         optstruct = struct.Struct('>xxBBxxxxxBHxBBBBxxBHH')
         offset = 0
         data = optstruct.unpack_from(optdata,offset)
-        self.unk1, self.unk2, self.wrapedges, self.timelimit, self.unk3, self.unk4, self.unk5, self.unk6, self.unk7, self.unk8, self.unk9 = data
+        self.unk1, self.unk2, self.wrapedges, self.timelimit, self.unk3, self.unk4, self.unk5, self.unk6, self.unk7, self.timelimit2, self.timelimit3 = data
 
 
     def LoadEntrances(self):
@@ -10139,6 +10139,16 @@ class LoadingTab(QtWidgets.QWidget):
         self.timer.setRange(0, 999)
         self.timer.setToolTip(trans.string('AreaDlg', 4))
         self.timer.setValue(Area.timeLimit + 100)
+
+        self.timelimit2 = QtWidgets.QSpinBox()
+        self.timelimit2.setRange(0, 999)
+        self.timelimit2.setToolTip(trans.string('AreaDlg', 38))
+        self.timelimit2.setValue(Area.timelimit2)
+
+        self.timelimit3 = QtWidgets.QSpinBox()
+        self.timelimit3.setRange(0, 999)
+        self.timelimit3.setToolTip(trans.string('AreaDlg', 38))
+        self.timelimit3.setValue(Area.timelimit3)           
         
         self.unk3 = QtWidgets.QSpinBox()
         self.unk3.setRange(0, 999)
@@ -10163,29 +10173,19 @@ class LoadingTab(QtWidgets.QWidget):
         self.unk7 = QtWidgets.QSpinBox()
         self.unk7.setRange(0, 999)
         self.unk7.setToolTip(trans.string('AreaDlg', 26))
-        self.unk7.setValue(Area.unk7)
-
-        self.unk8 = QtWidgets.QSpinBox()
-        self.unk8.setRange(0, 999)
-        self.unk8.setToolTip(trans.string('AreaDlg', 26))
-        self.unk8.setValue(Area.unk8)
-
-        self.unk9 = QtWidgets.QSpinBox()
-        self.unk9.setRange(0, 999)
-        self.unk9.setToolTip(trans.string('AreaDlg', 26))
-        self.unk9.setValue(Area.unk9)        
+        self.unk7.setValue(Area.unk7)     
         
         settingsLayout = QtWidgets.QFormLayout()
         settingsLayout.addRow(trans.string('AreaDlg', 22), self.unk1)
         settingsLayout.addRow(trans.string('AreaDlg', 23), self.unk2)
-        settingsLayout.addRow(trans.string('AreaDlg', 3), self.timer)        
+        settingsLayout.addRow(trans.string('AreaDlg', 3), self.timer)
+        settingsLayout.addRow(trans.string('AreaDlg', 36), self.timelimit2)
+        settingsLayout.addRow(trans.string('AreaDlg', 37), self.timelimit3) 
         settingsLayout.addRow(trans.string('AreaDlg', 24), self.unk3)        
         settingsLayout.addRow(trans.string('AreaDlg', 32), self.unk4)
         settingsLayout.addRow(trans.string('AreaDlg', 33), self.unk5)
         settingsLayout.addRow(trans.string('AreaDlg', 34), self.unk6)
-        settingsLayout.addRow(trans.string('AreaDlg', 35), self.unk7)
-        settingsLayout.addRow(trans.string('AreaDlg', 36), self.unk8)
-        settingsLayout.addRow(trans.string('AreaDlg', 37), self.unk9)        
+        settingsLayout.addRow(trans.string('AreaDlg', 35), self.unk7)       
         settingsLayout.addRow(self.wrap)
 
         Layout = QtWidgets.QVBoxLayout()
@@ -14974,8 +14974,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         """
         global levName; levName=name.replace('\\', '/').split('/')[-1]
 
-        if game is None:
-            game = NewSuperMarioBrosU
+        game = NewSuperMarioBrosU
 
         # Get the file path, if possible
         if name is not None:
@@ -16104,8 +16103,8 @@ class ReggieWindow(QtWidgets.QMainWindow):
             Area.unk5 = dlg.LoadingTab.unk5.value()
             Area.unk6 = dlg.LoadingTab.unk6.value()
             Area.unk7 = dlg.LoadingTab.unk7.value()
-            Area.unk8 = dlg.LoadingTab.unk8.value()
-            Area.unk9 = dlg.LoadingTab.unk9.value()            
+            Area.timelimit2 = dlg.LoadingTab.timelimit2.value()
+            Area.timelimit3 = dlg.LoadingTab.timelimit3.value()            
             
 
             if dlg.LoadingTab.wrap.isChecked():
