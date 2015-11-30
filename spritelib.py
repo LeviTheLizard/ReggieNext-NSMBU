@@ -120,6 +120,15 @@ def LoadBasicSuite():
         for x in range(BlockImage.width() // TileWidth):
             Blocks.append(BlockImage.copy(x * TileWidth, y * TileWidth, TileWidth, TileWidth))
     ImageCache['Blocks'] = Blocks
+    ImageCache['InvisiBlock'] = GetImg('block_invisible.png')
+
+    # Load contents of blocks
+    ItemImage = GetImg('block_contents.png')
+    Items = []
+    for y in range(ItemImage.height() // TileWidth):
+        for x in range(ItemImage.width() // TileWidth):
+            Items.append(ItemImage.copy(x * TileWidth, y * TileWidth, TileWidth, TileWidth))
+    ImageCache['Items'] = Items
 
     # Load the overrides
     Overrides = QtGui.QPixmap('reggiedata/overrides.png')
@@ -264,7 +273,7 @@ class SpriteImage_Static(SpriteImage):
         if self.image is None: return
         painter.save()
         painter.setOpacity(self.alpha)
-        painter.scale(16 * self.scale / TileWidth, 16 * self.scale / TileWidth) # rescale images not based on a 24x24 block size
+        painter.scale(16 * self.scale / TileWidth, 16 * self.scale / TileWidth) # rescale images not based on a 60x60 block size
         painter.setRenderHint(painter.SmoothPixmapTransform)
         painter.drawPixmap(0, 0, self.image)
         painter.restore()
