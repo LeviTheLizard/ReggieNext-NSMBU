@@ -1,8 +1,5 @@
 @echo OFF
 REM run-python34.bat
-REM
-REM Thanks to LifeMushroom (Mario64) for the idea.
-REM
 REM This only works if:
 REM - you have Python 3.4
 REM - you installed Python 3.4 to the default location
