@@ -619,11 +619,12 @@ class SpriteDefinition():
                 fields.append((3, attribs['title'], startbit, bitnum, comment))
 
 
-def LoadSpriteData():
+def LoadSpriteData(reload_=False):
     """
     Ensures that the sprite data info is loaded
     """
     global Sprites
+    if (Sprites is not None) and not reload_: return
 
     Sprites = [None] * 724
     errors = []
@@ -3151,7 +3152,7 @@ class Area_NSMBU(AbstractParsedArea):
         optstruct = struct.Struct('>xxBBxxxxxBHxBBBBxxBHH')
         offset = 0
         data = optstruct.unpack_from(optdata,offset)
-        self.unk1, self.unk2, self.wrapedges, self.timelimit, self.unk3, self.unk4, self.unk5, self.unk6, self.unk7, self.unk8, self.unk9 = data
+        self.unk1, self.unk2, self.wrapedges, self.timelimit, self.unk3, self.unk4, self.unk5, self.unk6, self.unk7, self.timelimit2, self.timelimit3 = data
 
 
     def LoadEntrances(self):
@@ -8406,7 +8407,7 @@ def LoadGameDef(name=None, dlg=None):
 
         # Load spritedata.xml and spritecategories.xml
         if dlg: dlg.setLabelText(trans.string('Gamedefs', 8)) # Loading sprite data...
-        LoadSpriteData()
+        LoadSpriteData(True)
         LoadSpriteListData(True)
         LoadSpriteCategories(True)
         if mainWindow:
@@ -8425,6 +8426,13 @@ def LoadGameDef(name=None, dlg=None):
         if mainWindow is not None: mainWindow.ReloadTilesets(True)
         LoadTilesetNames(True) # reloads tileset names
         if dlg: dlg.setValue(4)
+
+         # Reload spritedata
+##        if dlg: dlg.setLabelText(trans.string('Gamedefs', 10)) # Reloading spritedata...
+##        LoadSpriteData(True)
+##        LoadSpriteListData(True)
+##        LoadSpriteCategories(True)
+##        if dlg: dlg.setValue(5)       
 
         # Load sprites.py
         if dlg: dlg.setLabelText(trans.string('Gamedefs', 11)) # Loading sprite image data...
@@ -8536,8 +8544,6 @@ class ReggieGameDefinition():
             'ts1_descriptions': gdf(None, False),
             }
         self.folders = {
-            'bga': gdf(None, False),
-            'bgb': gdf(None, False),
             'sprites': gdf(None, False),
             }
 
@@ -8546,92 +8552,6 @@ class ReggieGameDefinition():
         Attempts to open/load a Game Definition from a name string
         """
         raise NotImplementedError
-        self.custom = True
-        name = str(name)
-        self.gamepath = name
-        MaxVer = 1.0
-
-        # Parse the file (errors are handled by __init__())
-        path = 'reggiedata/games/' + name + '/main.xml'
-        tree = etree.parse(path)
-        root = tree.getroot()
-
-        # Add the attributes of root: name, description, base
-        if 'name' not in root.attrib: raise Exception
-        self.name = root.attrib['name']
-
-        self.description = trans.string('Gamedefs', 15)
-        if 'description' in root.attrib: self.description = root.attrib['description'].replace('[', '<').replace(']', '>')
-        self.version = None
-        if 'version' in root.attrib: self.version = root.attrib['version']
-
-        self.base = None
-        if 'base' in root.attrib: self.base = FindGameDef(root.attrib['base'], name)
-        else: self.base = ReggieGameDefinition()
-
-        # Parse the nodes
-        addpath = 'reggiedata/games/' + name + '/'
-        for node in root:
-            n = node.tag.lower()
-            if n in ('file', 'folder'):
-                path = addpath + node.attrib['path']
-
-                if 'patch' in node.attrib:
-                    patch = node.attrib['patch'].lower() == 'true' # convert to bool
-                else: patch = True # DEFAULT PATCH VALUE
-                if 'game' in node.attrib:
-                    if node.attrib['game'] != trans.string('Gamedefs', 13): # 'New Super Mario Bros. Wii'
-                        def_ = FindGameDef(node.attrib['game'], name)
-                        path = 'reggiedata/games/' + def_.gamepath + '/' + node.attrib['path']
-                    else:
-                        path = 'reggiedata/' + node.attrib['path']
-
-                ListToAddTo = eval('self.%ss' % n) # self.files or self.folders
-                newdef = self.GameDefinitionFile(path, patch)
-                ListToAddTo[node.attrib['name']] = newdef
-
-        # Get rid of the XML stuff
-        del tree, root
-
-        # Load sprites.py if provided
-        if 'sprites' in self.files:
-            file = open(self.files['sprites'].path, 'r')
-            filedata = file.read()
-            file.close(); del file
-
-            # https://stackoverflow.com/questions/5362771/load-module-from-string-in-python
-            # with modifications
-            new_module = importlib.types.ModuleType(self.name + '->sprites')
-            exec(filedata, new_module.__dict__)
-            sys.modules[new_module.__name__] = new_module
-            self.sprites = new_module
-
-
-    def bgFile(self, name, layer):
-        """
-        Returns the folder to a bg image. Layer must be 'a' or 'b'
-        """
-        # Name will be of the format '0000.png'
-        fallback = 'reggiedata/bg' + layer
-        filename = 'bg%s/%s' % (layer, name)
-
-
-        # See if it was defined specifically
-        if filename in self.files:
-            path = self.files[filename].path
-            if os.path.isfile(path): return path
-
-        # See if it's in one of self.folders
-        if self.folders['bg%s' % layer].path is not None:
-            trypath = self.folders['bg%s' % layer].path + '/' + name
-            if os.path.isfile(trypath): return trypath
-
-        # If there's a base, return self.base.bgFile
-        if self.base is not None: return self.base.bgFile(name, layer)
-
-        # If not, return fallback
-        else: return fallback + '/' + name
-
 
     def GetGamePath(self):
         """
@@ -8956,8 +8876,9 @@ class ReggieTranslation():
                 33: 'Unknown Value 5:',
                 34: 'Unknown Value 6:',
                 35: 'Unknown Value 7:',
-                36: 'Unknown Value 8:',
-                37: 'Unknown Value 9:',
+                36: 'Time Limit 2:',
+                37: 'Time Limit 3:',
+                38: '[b]Time Limit 2 & 3:[/b]This time limit is chosen by the nybble 12 on sprite 25, Midway Point Flag. See sprite for details.',   
                 },
             'AutoSaveDlg': {
                 0: 'Auto-saved backup found',
@@ -11292,6 +11213,16 @@ class LoadingTab(QtWidgets.QWidget):
         self.timer.setRange(0, 999)
         self.timer.setToolTip(trans.string('AreaDlg', 4))
         self.timer.setValue(Area.timeLimit + 100)
+
+        self.timelimit2 = QtWidgets.QSpinBox()
+        self.timelimit2.setRange(0, 999)
+        self.timelimit2.setToolTip(trans.string('AreaDlg', 38))
+        self.timelimit2.setValue(Area.timelimit2)
+
+        self.timelimit3 = QtWidgets.QSpinBox()
+        self.timelimit3.setRange(0, 999)
+        self.timelimit3.setToolTip(trans.string('AreaDlg', 38))
+        self.timelimit3.setValue(Area.timelimit3)           
         
         self.unk3 = QtWidgets.QSpinBox()
         self.unk3.setRange(0, 999)
@@ -11316,29 +11247,19 @@ class LoadingTab(QtWidgets.QWidget):
         self.unk7 = QtWidgets.QSpinBox()
         self.unk7.setRange(0, 999)
         self.unk7.setToolTip(trans.string('AreaDlg', 26))
-        self.unk7.setValue(Area.unk7)
-
-        self.unk8 = QtWidgets.QSpinBox()
-        self.unk8.setRange(0, 999)
-        self.unk8.setToolTip(trans.string('AreaDlg', 26))
-        self.unk8.setValue(Area.unk8)
-
-        self.unk9 = QtWidgets.QSpinBox()
-        self.unk9.setRange(0, 999)
-        self.unk9.setToolTip(trans.string('AreaDlg', 26))
-        self.unk9.setValue(Area.unk9)        
+        self.unk7.setValue(Area.unk7)      
         
         settingsLayout = QtWidgets.QFormLayout()
         settingsLayout.addRow(trans.string('AreaDlg', 22), self.unk1)
         settingsLayout.addRow(trans.string('AreaDlg', 23), self.unk2)
-        settingsLayout.addRow(trans.string('AreaDlg', 3), self.timer)        
+        settingsLayout.addRow(trans.string('AreaDlg', 3), self.timer)
+        settingsLayout.addRow(trans.string('AreaDlg', 36), self.timelimit2)
+        settingsLayout.addRow(trans.string('AreaDlg', 37), self.timelimit3)         
         settingsLayout.addRow(trans.string('AreaDlg', 24), self.unk3)        
         settingsLayout.addRow(trans.string('AreaDlg', 32), self.unk4)
         settingsLayout.addRow(trans.string('AreaDlg', 33), self.unk5)
         settingsLayout.addRow(trans.string('AreaDlg', 34), self.unk6)
-        settingsLayout.addRow(trans.string('AreaDlg', 35), self.unk7)
-        settingsLayout.addRow(trans.string('AreaDlg', 36), self.unk8)
-        settingsLayout.addRow(trans.string('AreaDlg', 37), self.unk9)        
+        settingsLayout.addRow(trans.string('AreaDlg', 35), self.unk7)     
         settingsLayout.addRow(self.wrap)
 
         Layout = QtWidgets.QVBoxLayout()
@@ -12578,204 +12499,6 @@ class InfoPreviewWidget(QtWidgets.QWidget):
 
         self.update()
 
-
-class GameDefViewer(QtWidgets.QWidget):
-    """
-    Widget which displays basic info about the current game definition
-    """
-    def __init__(self):
-        """
-        Initializes the widget
-        """
-        QtWidgets.QWidget.__init__(self)
-        self.imgLabel = QtWidgets.QLabel()
-        self.imgLabel.setToolTip(trans.string('Gamedefs', 0))
-        self.imgLabel.setPixmap(GetIcon('sprites', False).pixmap(16, 16))
-        self.versionLabel = QtWidgets.QLabel()
-        self.titleLabel = QtWidgets.QLabel()
-        self.descLabel = QtWidgets.QLabel()
-        self.descLabel.setWordWrap(True)
-        self.descLabel.setMinimumHeight(40)
-
-        # Make layouts
-        left = QtWidgets.QVBoxLayout()
-        left.addWidget(self.imgLabel)
-        left.addWidget(self.versionLabel)
-        left.addStretch(1)
-        right = QtWidgets.QVBoxLayout()
-        right.addWidget(self.titleLabel)
-        right.addWidget(self.descLabel)
-        right.addStretch(1)
-        main = QtWidgets.QHBoxLayout()
-        main.addLayout(left)
-        main.addWidget(createVertLine())
-        main.addLayout(right)
-        main.setStretch(2, 1)
-        self.setLayout(main)
-        self.setMaximumWidth(256 + 64)
-
-        self.updateLabels()
-
-    def updateLabels(self):
-        """
-        Updates all labels
-        """
-        empty = QtGui.QPixmap(16, 16)
-        empty.fill(QtGui.QColor(0,0,0,0))
-        img = GetIcon('sprites', False).pixmap(16, 16) if ((gamedef.recursiveFiles('sprites', False, True) != []) or (not gamedef.custom)) else empty
-        ver = '' if gamedef.version is None else '<i><p style="font-size:10px;">v' + str(gamedef.version) + '</p></i>'
-        title = '<b>' + str(gamedef.name) + '</b>'
-        desc = str(gamedef.description)
-
-        self.imgLabel.setPixmap(img)
-        self.versionLabel.setText(ver)
-        self.titleLabel.setText(title)
-        self.descLabel.setText(desc)
-
-
-class GameDefSelector(QtWidgets.QWidget):
-    """
-    Widget which lets you pick a new game definition
-    """
-    gameChanged = QtCore.pyqtSignal()
-    def __init__(self):
-        """
-        Initializes the widget
-        """
-        QtWidgets.QWidget.__init__(self)
-
-        # Populate a list of gamedefs
-        self.GameDefs = getAvailableGameDefs()
-
-        # Add them to the main layout
-        self.group = QtWidgets.QButtonGroup()
-        self.group.setExclusive(True)
-        L = QtWidgets.QGridLayout()
-        row = 0
-        col = 0
-        current = setting('LastGameDef')
-        id = 0
-        for folder in self.GameDefs:
-            def_ = ReggieGameDefinition(folder)
-            btn = QtWidgets.QRadioButton()
-            if folder == current: btn.setChecked(True)
-            btn.toggled.connect(self.HandleRadioButtonClick)
-            self.group.addButton(btn, id)
-            btn.setToolTip(def_.description)
-            id += 1
-            L.addWidget(btn, row, col)
-
-            name = QtWidgets.QLabel(def_.name)
-            name.setToolTip(def_.description)
-            L.addWidget(name, row, col + 1)
-
-            row += 1
-            if row > 2:
-                row = 0
-                col += 2
-
-        self.setLayout(L)
-
-
-    def HandleRadioButtonClick(self, checked):
-        """
-        Handles radio button clicks
-        """
-        if not checked: return # this is called twice; one button is checked, another is unchecked
-
-        loadNewGameDef(self.GameDefs[self.group.checkedId()])
-        self.gameChanged.emit()
-
-
-class GameDefMenu(QtWidgets.QMenu):
-    """
-    A menu which lets the user pick gamedefs
-    """
-    gameChanged = QtCore.pyqtSignal()
-    def __init__(self):
-        """
-        Creates and initializes the menu
-        """
-        QtWidgets.QMenu.__init__(self)
-
-        # Add the gamedef viewer widget
-        self.currentView = GameDefViewer()
-        self.currentView.setMinimumHeight(100)
-        self.gameChanged.connect(self.currentView.updateLabels)
-
-        v = QtWidgets.QWidgetAction(self)
-        v.setDefaultWidget(self.currentView)
-        self.addAction(v)
-        self.addSeparator()
-
-        # Add entries for each gamedef
-        self.GameDefs = getAvailableGameDefs()
-
-        self.actGroup = QtWidgets.QActionGroup(self)
-        loadedDef = setting('LastGameDef')
-        for folder in self.GameDefs:
-            def_ = ReggieGameDefinition(folder)
-            act = QtWidgets.QAction(self)
-            act.setText(def_.name)
-            act.setToolTip(def_.description)
-            act.setData(folder)
-            act.setActionGroup(self.actGroup)
-            act.setCheckable(True)
-            if folder == loadedDef:
-                act.setChecked(True)
-                first = False
-            act.toggled.connect(self.handleGameDefClicked)
-            self.addAction(act)
-
-    def handleGameDefClicked(self, checked):
-        """
-        Handles the user clicking a gamedef
-        """
-        if not checked: return
-
-        name = self.actGroup.checkedAction().data()
-        loadNewGameDef(name)
-        self.gameChanged.emit()
-
-
-
-def getAvailableGameDefs():
-    GameDefs = []
-
-    # Add them
-    folders = os.listdir('reggiedata/games')
-    for folder in folders:
-        if not os.path.isdir('reggiedata/games/' + folder): continue
-        inFolder = os.listdir('reggiedata/games/' + folder)
-        if 'main.xml' not in inFolder: continue
-        def_ = ReggieGameDefinition(folder)
-        if def_.custom: GameDefs.append((def_, folder))
-
-    # Alphabetize them, and then add the default
-    GameDefs = sorted(GameDefs, key=lambda def_: def_[0].name)
-    new = [None]
-    for item in GameDefs: new.append(item[1])
-    return new
-
-def loadNewGameDef(def_):
-    """
-    Loads ReggieGameDefinition def_, and displays a progress dialog
-    """
-    dlg = QtWidgets.QProgressDialog()
-    dlg.setAutoClose(True)
-    btn = QtWidgets.QPushButton('Cancel')
-    btn.setEnabled(False)
-    dlg.setCancelButton(btn)
-    dlg.show()
-    dlg.setValue(0)
-
-    LoadGameDef(def_, dlg)
-
-    dlg.setValue(100)
-    del dlg
-
-
-
 def clipStr(text, idealWidth, font=None):
     """
     Returns a shortened string, or None if it need not be shortened
@@ -13101,6 +12824,7 @@ def LoadActionsLists():
         (trans.string('MenuItems', 80), False, 'importarea'),
         (trans.string('MenuItems', 82), False, 'deletearea'),
         (trans.string('MenuItems', 84), False, 'reloadgfx'),
+        (trans.string('MenuItems', 84), False, 'reloadspritedata'),        
         )
     HelpActions = (
         (trans.string('MenuItems', 86), False, 'infobox'),
@@ -13950,7 +13674,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         Sets up Reggie's actions, menus and toolbars
         """
         self.RecentMenu = RecentFilesMenu()
-        self.GameDefMenu = GameDefMenu()
 
         self.ribbon = None
         if UseRibbon:
@@ -14032,6 +13755,8 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.CreateAction('importarea', self.HandleImportArea, GetIcon('import'), trans.string('MenuItems', 80), trans.string('MenuItems', 81), QtGui.QKeySequence('Ctrl+Alt+O'))
         self.CreateAction('deletearea', self.HandleDeleteArea, GetIcon('delete'), trans.string('MenuItems', 82), trans.string('MenuItems', 83), QtGui.QKeySequence('Ctrl+Alt+D'))
         self.CreateAction('reloadgfx', self.ReloadTilesets, GetIcon('reload'), trans.string('MenuItems', 84), trans.string('MenuItems', 85), QtGui.QKeySequence('Ctrl+Shift+R'))
+        self.CreateAction('reloadspritedata', self.ReloadSpritedata, GetIcon('reload'), trans.string('MenuItems', 84), trans.string('MenuItems', 85), QtGui.QKeySequence('Ctrl+Shift+S'))
+
 
         # Help actions are created later
 
@@ -14145,6 +13870,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         lmenu.addAction(self.actions['deletearea'])
         lmenu.addSeparator()
         lmenu.addAction(self.actions['reloadgfx'])
+        lmenu.addAction(self.actions['reloadspritedata'])        
 
         hmenu = menubar.addMenu(trans.string('Menubar', 4))
         self.SetupHelpMenu(hmenu)
@@ -14248,6 +13974,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
                 'deletearea',
             ), (
                 'reloadgfx',
+                'reloadsprites',
             ), (
                 'infobox',
                 'helpbox',
@@ -16679,10 +16406,15 @@ class ReggieWindow(QtWidgets.QMainWindow):
 
         self.scene.update()
 
-
+    @QtCore.pyqtSlot()
+    def ReloadSpritedata(self):
+        """
+        Reloads spritedata within the editor
+        """
         global Sprites
         Sprites = None
-        LoadSpriteData()
+        print("I WAS CALLED...RIGHT?!?!")
+        LoadSpriteData(True)
 
 
     @QtCore.pyqtSlot()
@@ -17456,8 +17188,8 @@ class ReggieWindow(QtWidgets.QMainWindow):
             Area.unk5 = dlg.LoadingTab.unk5.value()
             Area.unk6 = dlg.LoadingTab.unk6.value()
             Area.unk7 = dlg.LoadingTab.unk7.value()
-            Area.unk8 = dlg.LoadingTab.unk8.value()
-            Area.unk9 = dlg.LoadingTab.unk9.value()            
+            Area.timelimit2 = dlg.LoadingTab.timelimit2.value()
+            Area.timelimit3 = dlg.LoadingTab.timelimit3.value()            
             
 
             if dlg.LoadingTab.wrap.isChecked():
