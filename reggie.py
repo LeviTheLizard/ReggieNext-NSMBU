@@ -272,7 +272,7 @@ def GetIcon(name, big=False):
 
 def SetGamePath(newpath):
     """
-    Sets the NSMBWii game path
+    Sets the NSMBU game path
     """
     global gamedef
 
@@ -3007,7 +3007,7 @@ class AbstractParsedArea(AbstractArea):
 
         # Save each block
         self.SaveTilesetNames() # block 1
-        #self.SaveOptions() # block 2
+        self.SaveOptions() # block 2
         self.SaveEntrances() # block 7
         self.SaveSprites() # block 8
         self.SaveLoadedSprites() # block 9
@@ -3152,7 +3152,7 @@ class Area_NSMBU(AbstractParsedArea):
         optstruct = struct.Struct('>xxBBxxxxxBHxBBBBxxBHH')
         offset = 0
         data = optstruct.unpack_from(optdata,offset)
-        self.unk1, self.unk2, self.wrapedges, self.timelimit, self.unk3, self.unk4, self.unk5, self.unk6, self.unk7, self.timelimit2, self.timelimit3 = data
+        self.unk1, self.unk2, self.wrapedges, self.timeLimit, self.unk3, self.unk4, self.unk5, self.unk6, self.unk7, self.timelimit2, self.timelimit3 = data
 
 
     def LoadEntrances(self):
@@ -3397,10 +3397,9 @@ class Area_NSMBU(AbstractParsedArea):
         Saves block 2, the general options
         """
         optstruct = struct.Struct('>xxBBxxxxxBHxBBBBxxBHH')
-        buffer = bytearray(20)
-        optstruct.pack_into(buffer, 0, self.unk1, self.unk2, self.wrapedges, self.timelimit, self.unk3, self.unk4, self.unk5, self.unk6, self.unk7, self.unk8, self.unk9)
+        buffer = bytearray(24)
+        optstruct.pack_into(buffer, 0, self.unk1, self.unk2, self.wrapedges, self.timeLimit, self.unk3, self.unk4, self.unk5, self.unk6, self.unk7, self.timelimit2, self.timelimit3)
         self.blocks[1] = bytes(buffer)
-
 
     def SaveLayer(self, idx):
         """
@@ -7493,7 +7492,7 @@ class PathNodeEditorWidget(QtWidgets.QWidget):
 
         self.unk1 = QtWidgets.QSpinBox()
         self.unk1.setRange(-127, 127)
-        self.unk1.setToolTip(trans.string('PathDataEditor', 7))
+        self.unk1.setToolTip(trans.string('PathDataEditor', 12))
         self.unk1.valueChanged.connect(self.Handleunk1Changed)
         self.unk1.setMaximumWidth(256)        
 
@@ -8942,8 +8941,8 @@ class ReggieTranslation():
             'ChangeGamePath': {
                 0: 'Choose the Course folder from [game]',
                 1: 'Error',
-                2: 'This folder doesn\'t have all of the files from the extracted NSMBWii Stage folder.',
-                3: 'This folder doesn\'t seem to have the required files. In order to use Reggie, you need the Stage folder from the game, including the Texture folder and the level files contained within it.',
+                2: 'This folder doesn\'t have all of the files from the extracted NSMBU course_res_pack folder.',
+                3: 'This folder doesn\'t seem to have the required files. In order to use Reggie, you need the course_res_pack folder from the game.',
                 },
             'Comments': {
                 0: '[x], [y]: [text]',
@@ -9310,6 +9309,7 @@ class ReggieTranslation():
                 9: '[b]Node [id][/b]',
                 10: 'Modify Selected Path Node Properties',
                 11: 'Unknown 0x01:',
+                12: '[b]Unknown 0x01:[/b][br]No idea what this is',                
                 },
             'Paths': {
                 0: '[b]Path [path][/b][br]Node [node]',
@@ -12086,14 +12086,6 @@ class ZoneTab(QtWidgets.QWidget):
             if self.Zone_presets.itemText(0) != trans.string('ZonesDlg', 60): self.Zone_presets.insertItem(0, trans.string('ZonesDlg', 60))
             self.Zone_presets.setCurrentIndex(0)
         self.AutoChangingSize = False
-
-def calculateBgAlignmentMode(idA, idB, idC):
-    """
-    Calculates alignment modes using the exact same logic as NSMBW
-    """
-    return 0
-
-
 
 # Sets up the Screen Cap Choice Dialog
 class ScreenCapChoiceDialog(QtWidgets.QDialog):
