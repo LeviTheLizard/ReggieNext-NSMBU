@@ -235,7 +235,31 @@ class SpriteImage_MovingCoin(SLib.SpriteImage_Static): # 87
             parent,
             3.75,
             ImageCache['Coin'],
-            ) 
+            )
+
+class SpriteImage_QuestionSwitch(SLib.SpriteImage_Static): # 104
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['QSwitch'],
+            )
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('QSwitch', 'q_switch.png')
+
+class SpriteImage_PSwitch(SLib.SpriteImage_Static): # 105
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['PSwitch'],
+            )
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('PSwitch', 'p_switch.png')        
 
 class SpriteImage_PipeUp(SLib.SpriteImage): # 139
     def __init__(self, parent, scale=3.75):
@@ -298,8 +322,19 @@ class SpriteImage_BubbleYoshi(SLib.SpriteImage_Static): # 143, 243
 
     @staticmethod
     def loadImages():
-        SLib.loadIfNotInImageCache('BubbleYoshi', 'babyyoshibubble.png')                 
+        SLib.loadIfNotInImageCache('BubbleYoshi', 'babyyoshibubble.png')
+       
+class SpriteImage_POWBlock(SLib.SpriteImage_Static): # 152
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['POWBlock'],
+            )
 
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('POWBlock', 'block_pow.png')  
 
 class SpriteImage_CoinOutline(SLib.SpriteImage_StaticMultiple): # 158
     def __init__(self, parent):
@@ -318,6 +353,18 @@ class SpriteImage_CoinOutline(SLib.SpriteImage_StaticMultiple): # 158
         multi = (self.parent.spritedata[2] >> 4) & 1
         self.image = ImageCache['CoinOutline' + ('Multiplayer' if multi else '')]
         super().dataChanged()
+
+class SpriteImage_Springboard(SLib.SpriteImage_Static): # 215
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['Springboard'],
+            )
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('Springboard', 'springboard.png')         
 
 class SpriteImage_BalloonYoshi(SLib.SpriteImage_Static): # 224
     def __init__(self, parent):
@@ -346,7 +393,34 @@ class SpriteImage_TileGod(SLib.SpriteImage): # 237
         if width == 1 and height == 1:
             self.aux[0].setSize(0,0)
             return
-        self.aux[0].setSize(width * 60, height * 60)    
+        self.aux[0].setSize(width * 60, height * 60)
+
+class SpriteImage_Muncher(SLib.SpriteImage_StaticMultiple): # 259
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ) 
+
+        #self.yOffset = -2
+        #self.xOffset = -1
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('MuncherReg', 'muncher.png')
+        SLib.loadIfNotInImageCache('MuncherFr', 'muncher_frozen.png')
+
+    def dataChanged(self):
+
+        # shiz
+        shellcolor = self.parent.spritedata[5] & 1 # just 2 values, so throw this
+
+        if shellcolor == 0:
+            self.image = ImageCache['MuncherReg']
+        else:
+            self.image = ImageCache['MuncherFr']
+            
+        super().dataChanged()        
 
 class SpriteImage_Parabeetle(SLib.SpriteImage_Static): # 261
     def __init__(self, parent):
@@ -382,8 +456,52 @@ class SpriteImage_BoltControlledCoin(SLib.SpriteImage_Static): # 328
             parent,
             3.75,
             ImageCache['Coin'],
-            )  
+            )
 
+class SpriteImage_WoodenBox(SLib.SpriteImage_StaticMultiple): # 338
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            )
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('Reg2x2', 'reg_box_2x2.png')
+        SLib.loadIfNotInImageCache('Reg4x2', 'reg_box_4x2.png')
+        SLib.loadIfNotInImageCache('Reg2x4', 'reg_box_2x4.png')
+        SLib.loadIfNotInImageCache('Reg4x4', 'reg_box_4x4.png')                
+        SLib.loadIfNotInImageCache('Inv2x2', 'inv_box_2x2.png')
+        SLib.loadIfNotInImageCache('Inv4x2', 'inv_box_4x2.png')
+        SLib.loadIfNotInImageCache('Inv2x4', 'inv_box_2x4.png')
+        SLib.loadIfNotInImageCache('Inv4x4', 'inv_box_4x4.png')        
+
+    def dataChanged(self):          
+        
+        boxcolor = self.parent.spritedata[4]
+        boxsize = self.parent.spritedata[5] >> 4
+        
+        if boxsize == 0 and boxcolor == 0:
+            self.image = ImageCache['Reg2x2']
+        elif boxsize == 1 and boxcolor == 0:
+            self.image = ImageCache['Reg2x4']
+        elif boxsize == 2 and boxcolor == 0:
+            self.image = ImageCache['Reg4x2']
+        elif boxsize == 3 and boxcolor == 0:
+            self.image = ImageCache['Reg4x4']
+        elif boxsize == 0 and boxcolor == 2:
+            self.image = ImageCache['Inv2x2']
+        elif boxsize == 1 and boxcolor == 2:
+            self.image = ImageCache['Inv2x4']
+        elif boxsize == 2 and boxcolor == 2:
+            self.image = ImageCache['Inv4x2']
+        elif boxsize == 3 and boxcolor == 2:
+            self.image = ImageCache['Inv4x4']
+        else:
+            self.image = ImageCache['Reg2x2'] # let's not make some nonsense out of this
+            
+        super().dataChanged()
+   
 class SpriteImage_SuperGuide(SLib.SpriteImage_Static): # 348
     def __init__(self, parent):
         super().__init__(
@@ -504,16 +622,22 @@ ImageClasses = {
     65: SpriteImage_Coin,
 #    70: SpriteImage_MovementControllerTwoWay,
     87: SpriteImage_MovingCoin,
+    104: SpriteImage_QuestionSwitch,
+    105: SpriteImage_PSwitch,
     139: SpriteImage_PipeUp,
     143: SpriteImage_BubbleYoshi,
+    152: SpriteImage_POWBlock,
     158: SpriteImage_CoinOutline,
+    215: SpriteImage_Springboard,
     224: SpriteImage_BalloonYoshi,
     237: SpriteImage_TileGod,
     243: SpriteImage_BubbleYoshi,
+    259: SpriteImage_Muncher,
     261: SpriteImage_Parabeetle,
     325: SpriteImage_RotationControlledCoin,
     326: SpriteImage_MovementControlledCoin,
     328: SpriteImage_BoltControlledCoin,
+    338: SpriteImage_WoodenBox,    
     348: SpriteImage_SuperGuide,
     365: SpriteImage_GoldenYoshi,
 #    422: SpriteImage_BigBrickBlock,
