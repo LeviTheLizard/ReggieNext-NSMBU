@@ -402,9 +402,6 @@ class SpriteImage_Muncher(SLib.SpriteImage_StaticMultiple): # 259
             3.75,
             ) 
 
-        #self.yOffset = -2
-        #self.xOffset = -1
-
     @staticmethod
     def loadImages():
         SLib.loadIfNotInImageCache('MuncherReg', 'muncher.png')
@@ -413,9 +410,9 @@ class SpriteImage_Muncher(SLib.SpriteImage_StaticMultiple): # 259
     def dataChanged(self):
 
         # shiz
-        shellcolor = self.parent.spritedata[5] & 1 # just 2 values, so throw this
+        isfrozen = self.parent.spritedata[5] & 1
 
-        if shellcolor == 0:
+        if isfrozen == 0:
             self.image = ImageCache['MuncherReg']
         else:
             self.image = ImageCache['MuncherFr']
@@ -537,6 +534,36 @@ class SpriteImage_GoldenYoshi(SLib.SpriteImage_Static): # 365
 #        self.tileheight = 2
 #        self.tilewidth = 2
 
+class SpriteImage_Fliprus(SLib.SpriteImage_StaticMultiple): # 441
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            )
+        
+        self.yOffset = -16
+        self.xOffset = -6
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('FliprusL', 'fliprus_l.png')
+        SLib.loadIfNotInImageCache('FliprusR', 'fliprus_r.png')
+
+    def dataChanged(self):
+        direction = self.parent.spritedata[4]
+
+        if direction == 0:
+            self.image = ImageCache['FliprusL']
+        elif direction == 1:
+            self.image = ImageCache['FliprusR']
+        elif direction == 2:
+            self.image = ImageCache['FliprusL']
+        else:
+            self.image = ImageCache['FliprusL']
+            
+        super().dataChanged()        
+        
+
 class SpriteImage_BonyBeetle(SLib.SpriteImage_Static): # 443
     def __init__(self, parent):
         super().__init__(
@@ -548,6 +575,21 @@ class SpriteImage_BonyBeetle(SLib.SpriteImage_Static): # 443
     @staticmethod
     def loadImages():
         SLib.loadIfNotInImageCache('BonyBeetle', 'bony_beetle.png')
+
+class SpriteImage_FliprusSnowball(SLib.SpriteImage_StaticMultiple): # 446
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['Snowball'],
+            )
+        
+        self.yOffset = -10
+        #self.xOffset = -6
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('Snowball', 'snowball.png')        
 
 # Unfinished
 #class SpriteImage_BigQBlock(SpriteImage_Block): # 475
@@ -641,7 +683,9 @@ ImageClasses = {
     348: SpriteImage_SuperGuide,
     365: SpriteImage_GoldenYoshi,
 #    422: SpriteImage_BigBrickBlock,
+    441: SpriteImage_Fliprus,
     443: SpriteImage_BonyBeetle,
+    446: SpriteImage_FliprusSnowball,
 #    475: SpriteImage_BigQBlock,
     481: SpriteImage_WaddleWing,
     496: SpriteImage_BoltControlledMovingCoin,
