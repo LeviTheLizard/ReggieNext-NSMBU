@@ -150,6 +150,21 @@ class SpriteImage_KoopaTroopa(SLib.SpriteImage_StaticMultiple): # 19
             
         super().dataChanged()
 
+class SpriteImage_MidwayFlag(SLib.SpriteImage_StaticMultiple): # 25
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['MidwayFlag'],
+            )
+        
+        self.yOffset = -41
+        #self.xOffset = -10
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('MidwayFlag', 'midway_flag.png')         
+
 # Image doesn't exist
 #class SpriteImage_StarCoin(SLib.SpriteImage_Static): # 45
 #    def __init__(self, parent):
@@ -200,6 +215,21 @@ class SpriteImage_InvisiBlock(SpriteImage_Block): # 61
             )
         self.invisiblock = True
 
+class SpriteImage_StalkingPiranha(SLib.SpriteImage_StaticMultiple): # 63
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['StalkingPiranha'],
+            )
+        
+        self.yOffset = -17
+        #self.xOffset = -10
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('StalkingPiranha', 'stalking_piranha.png')    
+
 class SpriteImage_Coin(SLib.SpriteImage_Static): # 65
     def __init__(self, parent):
         super().__init__(
@@ -227,7 +257,22 @@ class SpriteImage_MovementControllerTwoWay(SLib.SpriteImage): # 70
         width = ((self.parent.spritedata[7] & 0xF) + 1) << 4
         self.aux[0].setSize(width, distance + 60)
         self.aux[0].setPos(0, 0)
-        self.aux[0].update()        
+        self.aux[0].update()
+
+class SpriteImage_HuckitCrab(SLib.SpriteImage_StaticMultiple): # 74
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['HuckitCrab'],
+            )
+        
+        self.yOffset = -4.5 # close enough, it can't be a whole number
+        self.xOffset = -10
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('HuckitCrab', 'huckit_crab.png')          
 
 class SpriteImage_MovingCoin(SLib.SpriteImage_Static): # 87
     def __init__(self, parent):
@@ -354,6 +399,52 @@ class SpriteImage_CoinOutline(SLib.SpriteImage_StaticMultiple): # 158
         self.image = ImageCache['CoinOutline' + ('Multiplayer' if multi else '')]
         super().dataChanged()
 
+class SpriteImage_Parabomb(SLib.SpriteImage_StaticMultiple): # 170
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['Parabomb'],
+            )
+        
+        self.yOffset = -16
+        #self.xOffset = -6
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('Parabomb', 'parabomb.png')          
+
+class SpriteImage_Mechakoopa(SLib.SpriteImage_StaticMultiple): # 175
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['Mechakoopa'],
+            )
+        
+        self.yOffset = -10
+        self.xOffset = -6
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('Mechakoopa', 'mechakoopa.png')        
+
+
+class SpriteImage_RouletteBlock(SLib.SpriteImage_StaticMultiple): # 195
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['RouletteBlock'],
+            )
+        
+        #self.yOffset = -17
+        #self.xOffset = -6
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('RouletteBlock', 'block_roulette.png')        
+
 class SpriteImage_Springboard(SLib.SpriteImage_Static): # 215
     def __init__(self, parent):
         super().__init__(
@@ -394,6 +485,36 @@ class SpriteImage_TileGod(SLib.SpriteImage): # 237
             self.aux[0].setSize(0,0)
             return
         self.aux[0].setSize(width * 60, height * 60)
+
+class SpriteImage_PricklyGoomba(SLib.SpriteImage_StaticMultiple): # 247
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['PricklyGoomba'],
+            )
+        
+        self.yOffset = -13
+        #self.xOffset = -6
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('PricklyGoomba', 'prickly_goomba.png')           
+
+class SpriteImage_Wiggler(SLib.SpriteImage_StaticMultiple): # 249
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['Wiggler'],
+            )
+        
+        self.yOffset = -17
+        #self.xOffset = -6
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('Wiggler', 'wiggler.png')         
 
 class SpriteImage_Muncher(SLib.SpriteImage_StaticMultiple): # 259
     def __init__(self, parent):
@@ -695,6 +816,21 @@ class SpriteImage_MiniPipeLeft(SLib.SpriteImage): # 517
         painter.drawPixmap(0, 0, ImageCache['MiniPipeTopGreen'])
         painter.drawTiledPixmap(60, 0, self.pipeHeight * 60 - 60, 120, ImageCache['MiniPipeMiddleGreen'])
 
+class SpriteImage_Goombrat(SLib.SpriteImage_StaticMultiple): # 595
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['Goombrat'],
+            )
+        
+        #self.yOffset = -17
+        #self.xOffset = -6
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('Goombrat', 'goombrat.png')          
+
 ################################################################
 ################################################################
 
@@ -702,11 +838,14 @@ class SpriteImage_MiniPipeLeft(SLib.SpriteImage): # 517
 ImageClasses = {
     0: SpriteImage_Goomba,
     19: SpriteImage_KoopaTroopa,
+    25: SpriteImage_MidwayFlag,
     59: SpriteImage_QBlock,
     60: SpriteImage_BrickBlock,
-    61: SpriteImage_InvisiBlock,
+#    61: SpriteImage_InvisiBlock,
+    63: SpriteImage_StalkingPiranha,
     65: SpriteImage_Coin,
 #    70: SpriteImage_MovementControllerTwoWay,
+    74: SpriteImage_HuckitCrab,
     87: SpriteImage_MovingCoin,
     104: SpriteImage_QuestionSwitch,
     105: SpriteImage_PSwitch,
@@ -714,10 +853,15 @@ ImageClasses = {
     143: SpriteImage_BubbleYoshi,
     152: SpriteImage_POWBlock,
     158: SpriteImage_CoinOutline,
+    170: SpriteImage_Parabomb,
+    175: SpriteImage_Mechakoopa,
+    195: SpriteImage_RouletteBlock,
     215: SpriteImage_Springboard,
     224: SpriteImage_BalloonYoshi,
     237: SpriteImage_TileGod,
     243: SpriteImage_BubbleYoshi,
+    247: SpriteImage_PricklyGoomba,
+    249: SpriteImage_Wiggler,
     259: SpriteImage_Muncher,
     261: SpriteImage_Parabeetle,
     325: SpriteImage_RotationControlledCoin,
@@ -736,4 +880,5 @@ ImageClasses = {
     499: SpriteImage_MovingGrassPlatform,
     504: SpriteImage_Grrrol,
 #    517: SpriteImage_MiniPipeLeft,
+    595: SpriteImage_Goombrat,
     }
