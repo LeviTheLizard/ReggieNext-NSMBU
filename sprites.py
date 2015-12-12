@@ -813,10 +813,8 @@ class SpriteImage_MovingGrassPlatform(SLib.SpriteImage): # 499
     def dataChanged(self):
         super().dataChanged()
 
-        width = self.parent.spritedata[8] & 0xF
-        height = self.parent.spritedata[9] & 0xF
-        if width == 0: width = 1
-        if height == 0: height = 1
+        width = (self.parent.spritedata[8] & 0xF) + 1
+        height = (self.parent.spritedata[9] & 0xF) + 1
         if width == 1 and height == 1:
             self.aux[0].setSize(0,0)
             return
