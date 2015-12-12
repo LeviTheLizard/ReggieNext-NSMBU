@@ -82,6 +82,7 @@ import yaz0
 
 ReggieID = 'Reggie! Level Editor Next by Treeki, Tempus, RoadrunnerWMC'
 ReggieVersion = 'Next Milestone 2 Alpha 4'
+ReggieVersionShort = 'v4.1 (a)'
 UpdateURL = 'http://rvlution.net/reggie/updates.xml'
 
 TileWidth = 60
@@ -110,52 +111,159 @@ FirstLevels = {
     NewSuperLuigiU: '1-1',
     }
 
-def checkSplashEnabled():
+class ReggieSplashScreen(QtWidgets.QSplashScreen):
     """
-    Checks to see if the splash screen is enabled
+    Splash screen class for Reggie.
     """
-    global prefs
-    if setting('SplashEnabled') is None and not TPLLib.using_cython:
-        return True
-    elif setting('SplashEnabled'):
-        return True
-    else:
-        return False
+    cfgData = {}
+    currentDesc = ''
+    currentPos = 0
+    posLimit = 0
 
-def loadSplash():
-    """
-    If called, this will show the splash screen until removeSplash is called
-    """
-    splashpixmap = QtGui.QPixmap('reggiedata/splash.png')
-    app.splashscrn = QtWidgets.QSplashScreen(splashpixmap)
-    app.splashscrn.show()
-    app.processEvents()
+    def __init__(self):
+        """
+        Initializes the splash screen.
+        super().__init__(QPixmap) has to be called with the pixmap you want or else transparency
+        is messed up. self.setPixmap(QPixmap) doesn't seem to work properly.
+        """
+        self.loadCfg()
+        self.loadResources()
+        super().__init__(self.basePix)
 
-def updateSplash(message, progress):
-    """
-    This will update the splashscreen with the given message and progressval
-    """
-    font = QtGui.QFont()
-    font.setPointSize(10)
 
-    message = trans.string('Splash', 0, '[current]', message, '[stage]', progress)
-    splashtextpixmap = QtGui.QPixmap('reggiedata/splash.png')
-    splashtextpixmappainter = QtGui.QPainter(splashtextpixmap)
-    splashtextpixmappainter.setFont(font)
-    splashtextpixmappainter.drawText(220, 195, message)
-    app.splashscrn.setPixmap(splashtextpixmap)
-    splashtextpixmappainter = None
-    app.processEvents()
+    def loadCfg(self):
+        """
+        Loads the raw data from splash_config.txt
+        """
+        cfgData = {}
+        with open('reggiedata/splash_config.txt', encoding='utf-8') as cfg:
+            for line in cfg:
+                lsplit = line.replace('\n', '').split(':')
+                key = lsplit[0].lower()
+                value = ':'.join(lsplit[1:])
+                if value.lower() in ('true', 'false'):
+                    value = value.lower() == 'true'
+                elif ',' in value:
+                    value = value.split(',')
+                    for i, entry in enumerate(value):
+                        try:
+                            value[i] = int(entry)
+                        except ValueError: pass
+                if isinstance(value, str):
+                    try:
+                        value = int(value)
+                    except ValueError: pass
+                cfgData[key] = value
+        self.cfgData = cfgData
 
-def removeSplash():
-    """
-    This will delete the splash screen, if it exists
-    """
-    if app.splashscrn is not None:
-        app.splashscrn.close()
-        app.splashscrn = None
-        splashpixmap = None
-        splashtextpixmap = None
+
+    def loadResources(self):
+        """
+        Reads the info from self.cfgData and loads stuff
+        """
+        self.basePix = QtGui.QPixmap(os.path.join('reggiedata', self.cfgData['base_image']))
+
+        def loadFont(name):
+            fname = self.cfgData.get(name + '_font', 'sans-serif')
+            bold = self.cfgData.get(name + '_font_bold', False)
+            color = '#' + self.cfgData.get(name + '_font_color', '000000')
+            size = self.cfgData.get(name + '_font_size', 12)
+            weight = self.cfgData.get(name + '_font_weight', 12)
+            wLim = self.cfgData.get(name + '_wrap_limit', 1024)
+            position = self.cfgData.get(name + '_position', (0, 0))
+            centered = self.cfgData.get(name + '_centered', False)
+
+            font = QtGui.QFont()
+            font.setFamily(fname)
+            font.setBold(bold)
+            font.setPointSize(size)
+            font.setWeight(weight)
+            return font, position, color, centered, wLim
+
+        self.versionFontInfo = loadFont('version')
+        self.loadingFontInfo = loadFont('loading')
+        self.copyrightFontInfo = loadFont('copyright')
+
+        mNameL = self.cfgData.get('meter_left', '')
+        mNameM = self.cfgData.get('meter_mid', '')
+        mNameR = self.cfgData.get('meter_right', '')
+        self.meterPos = self.cfgData.get('meter_position', (0, 0))
+        self.meterWidth = self.cfgData.get('meter_width', 64)
+
+        self.meterL = QtGui.QPixmap(os.path.join('reggiedata', mNameL))
+        self.meterM = QtGui.QPixmap(os.path.join('reggiedata', mNameM))
+        self.meterR = QtGui.QPixmap(os.path.join('reggiedata', mNameR))
+
+
+    def setProgressLimit(self, limit):
+        """
+        Sets the maximum progress, used to calculate the progress bar
+        """
+        self.posLimit = limit
+
+
+    def setProgress(self, desc, pos):
+        """
+        Sets the current progress
+        """
+        self.currentDesc = desc
+        self.currentPos = pos
+        self.repaint()
+        app.processEvents()
+
+
+    def drawContents(self, painter):
+        """
+        Draws the contents of the splash screen
+        """
+        painter.setRenderHint(painter.Antialiasing)
+
+        totalWidthSoFar = self.meterWidth * (self.currentPos / self.posLimit)
+        painter.drawPixmap(
+            self.meterPos[0],
+            self.meterPos[1],
+            min(self.meterL.width(), self.meterWidth * (self.currentPos / self.posLimit)),
+            self.meterL.height(),
+            self.meterL,
+            )
+        painter.drawTiledPixmap(
+            self.meterPos[0] + self.meterL.width(),
+            self.meterPos[1],
+            min(self.meterWidth - self.meterL.width() - self.meterR.width(), totalWidthSoFar - self.meterL.width()),
+            self.meterM.height(),
+            self.meterM,
+            )
+        painter.drawTiledPixmap(
+            self.meterPos[0] + self.meterWidth - self.meterR.width(),
+            self.meterPos[1],
+            totalWidthSoFar - self.meterWidth + self.meterR.width(),
+            self.meterR.height(),
+            self.meterR,
+            )
+
+        def drawText(text, font, position, color, centered, wLim):
+            """
+            Draws some text
+            """
+            rect = QtCore.QRectF(
+                position[0] - (wLim / 2 if centered else 0),
+                position[1],
+                wLim,
+                512,
+                )
+            flags = (Qt.AlignHCenter if centered else Qt.AlignLeft) | Qt.AlignTop | Qt.TextWordWrap
+
+            painter.save()
+            painter.setFont(font)
+            r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+            painter.setPen(QtGui.QPen(QtGui.QColor(r, g, b)))
+            painter.drawText(rect, flags, text)
+            painter.restore()
+
+        drawText(ReggieVersionShort, *self.versionFontInfo)
+        drawText(self.currentDesc, *self.loadingFontInfo)
+        with open('license_short.txt', 'r') as copyFile:
+            drawText(copyFile.read(), *self.copyrightFontInfo)
 
 def GetUseRibbon():
     """
@@ -2946,29 +3054,20 @@ class AbstractParsedArea(AbstractArea):
         self.LoadComments()
 
         # Load the tilesets
-        if progress is not None: progress.setLabelText(trans.string('Splash', 3))
-        if app.splashscrn is not None: updateSplash(trans.string('Splash', 3), 0)
+        app.splashScreen.setProgress(trans.string('Splash', 3), 1)
 
         CreateTilesets()
-        if progress is not None: progress.setValue(1)
-        if app.splashscrn is not None: updateSplash(trans.string('Splash', 3), 1)
+        app.splashScreen.setProgress(trans.string('Splash', 3), 2)
         if self.tileset0 != '': LoadTileset(0, self.tileset0)
-        if progress is not None: progress.setValue(2)
-        if app.splashscrn is not None: updateSplash(trans.string('Splash', 3), 2)
+        app.splashScreen.setProgress(trans.string('Splash', 3), 3)
         if self.tileset1 != '': LoadTileset(1, self.tileset1)
-        if progress is not None: progress.setValue(3)
-        if app.splashscrn is not None: updateSplash(trans.string('Splash', 3), 3)
+        app.splashScreen.setProgress(trans.string('Splash', 3), 4)
         if self.tileset2 != '': LoadTileset(2, self.tileset2)
-        if progress is not None: progress.setValue(4)
-        if app.splashscrn is not None: updateSplash(trans.string('Splash', 3), 4)
+        app.splashScreen.setProgress(trans.string('Splash', 3), 5)
         if self.tileset3 != '': LoadTileset(3, self.tileset3)
 
         # Load the object layers
-        if progress is not None:
-            progress.setLabelText(trans.string('Splash', 1))
-            progress.setValue(5)
-        if app.splashscrn is not None:
-            updateSplash(trans.string('Splash', 1), 5)
+        app.splashScreen.setProgress(trans.string('Splash', 1), 6)
 
         self.layers = [[], [], []]
 
@@ -12897,20 +12996,6 @@ class PreferencesDialog(QtWidgets.QDialog):
                 """
                 QtWidgets.QWidget.__init__(self)
 
-                # Add the Splash Screen settings
-                self.SplashR = QtWidgets.QRadioButton(trans.string('PrefsDlg', 8))
-                self.SplashA = QtWidgets.QRadioButton(trans.string('PrefsDlg', 9))
-                self.SplashN = QtWidgets.QRadioButton(trans.string('PrefsDlg', 10))
-                self.SplashG = QtWidgets.QButtonGroup() # huge glitches if it's not assigned to self.something
-                self.SplashG.setExclusive(True)
-                self.SplashG.addButton(self.SplashR)
-                self.SplashG.addButton(self.SplashA)
-                self.SplashG.addButton(self.SplashN)
-                SplashL = QtWidgets.QVBoxLayout()
-                SplashL.addWidget(self.SplashR)
-                SplashL.addWidget(self.SplashA)
-                SplashL.addWidget(self.SplashN)
-
                 # Add the Menu Format settings
                 self.MenuR = QtWidgets.QRadioButton(trans.string('PrefsDlg', 12))
                 self.MenuM = QtWidgets.QRadioButton(trans.string('PrefsDlg', 13))
@@ -12945,7 +13030,6 @@ class PreferencesDialog(QtWidgets.QDialog):
 
                 # Create the main layout
                 L = QtWidgets.QFormLayout()
-                L.addRow(trans.string('PrefsDlg', 7), SplashL)
                 L.addRow(trans.string('PrefsDlg', 11), MenuL)
                 L.addRow(trans.string('PrefsDlg', 27), TileL)
                 L.addRow(trans.string('PrefsDlg', 14), self.Trans)
@@ -12960,9 +13044,6 @@ class PreferencesDialog(QtWidgets.QDialog):
                 """
                 Read the preferences and check the respective boxes
                 """
-                if str(setting('ShowSplash')): self.SplashA.setChecked(True)
-                elif str(setting('ShowSplash')): self.SplashN.setChecked(True)
-                else: self.SplashR.setChecked(True)
 
                 if str(setting('Menu')) == 'Ribbon': self.MenuR.setChecked(True)
                 else: self.MenuM.setChecked(True)
@@ -13571,6 +13652,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.setWindowTitle('Reggie! NSMBU Editor')
         self.setWindowIcon(QtGui.QIcon('reggiedata/icon.png'))
         self.setIconSize(QtCore.QSize(16, 16))
+        self.setUnifiedTitleAndToolBarOnMac(True)
 
         # create the level view
         self.scene = LevelScene(0, 0, 1024*TileWidth, 512*TileWidth, self)
@@ -15400,15 +15482,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         if dlg.exec_() == QtWidgets.QDialog.Rejected:
             return
 
-
-        # Get the splash screen setting
-        if dlg.generalTab.SplashA.isChecked():
-            setSetting('ShowSplash', True)
-        elif dlg.generalTab.SplashN.isChecked():
-            setSetting('ShowSplash', False)
-        else:
-            setSetting('ShowSplash', 'TPLLib')
-
         # Get the Menubar/Ribbon setting
         if dlg.generalTab.MenuR.isChecked():
             setSetting('Menu', 'Ribbon')
@@ -16153,21 +16226,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
 
         levelData = levelFileData
 
-        # Track progress.. but only if we don't have TPLLib
-        # Cython version because otherwise it's far too fast.
-        if TPLLib.using_cython:
-            progress = None
-        elif app.splashscrn is not None:
-            progress = None
-        else:
-            progress = QtWidgets.QProgressDialog(self)
-
-            progress.setCancelButton(None)
-            progress.setMinimumDuration(0)
-            progress.setRange(0, 7)
-            progress.setWindowModality(Qt.WindowModal)
-            progress.setWindowTitle('Reggie!')
-
         # Here's how progress is tracked. (After the major refactor, it may be a bit messed up now.)
         # - 0: Loading level data
         # [Area.__init__ is entered here]
@@ -16200,12 +16258,8 @@ class ReggieWindow(QtWidgets.QMainWindow):
         OverrideSnapping = True
 
         # Update progress
-        if progress is not None:
-            progress.setLabelText(trans.string('Splash', 2))
-            progress.setValue(0)
-        if app.splashscrn is not None:
-            updateSplash(trans.string('Splash', 2), 0)
-        self.LoadLevel_NSMBU(levelData, areaNum, progress)
+        app.splashScreen.setProgress(trans.string('Splash', 2), 0)
+        self.LoadLevel_NSMBU(levelData, areaNum)
 
         # Set the level overview settings
         mainWindow.levelOverview.maxX = 100
@@ -16259,9 +16313,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.levelOverview.update()
         QtCore.QTimer.singleShot(20, self.levelOverview.update)
 
-        # Remove the splashscreen
-        removeSplash()
-
         # Add the path to Recent Files
         self.RecentFilesMgr.addPath(mainWindow.fileSavePath)
 
@@ -16272,7 +16323,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         # If we got this far, everything worked! Return True.
         return True
 
-    def LoadLevel_NSMBU(self, levelData, areaNum, progress):
+    def LoadLevel_NSMBU(self, levelData, areaNum):
         """
         Performs all level-loading tasks specific to New Super Mario Bros. U levels.
         Do not call this directly - use LoadLevel(NewSuperMarioBros2, ...) instead!
@@ -16283,15 +16334,11 @@ class ReggieWindow(QtWidgets.QMainWindow):
         Level = Level_NSMBU()
 
         # Load it
-        if not Level.load(levelData, areaNum, progress):
+        if not Level.load(levelData, areaNum):
             raise Exception
 
         # Prepare the object picker
-        if progress is not None:
-            progress.setLabelText(trans.string('Splash', 4))
-            progress.setValue(6)
-        if app.splashscrn is not None:
-            updateSplash(trans.string('Splash', 4), 6)
+        app.splashScreen.setProgress(trans.string('Splash', 4), 7)
 
         self.objUseLayer1.setChecked(True)
 
@@ -16304,11 +16351,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.objAllTab.setTabEnabled(3, (Area.tileset3 != ''))
 
         # Add all things to scene
-        if progress is not None:
-            progress.setLabelText(trans.string('Splash', 5))
-            progress.setValue(7)
-        if app.splashscrn is not None:
-            updateSplash(trans.string('Splash', 5), 7)
+        app.splashScreen.setProgress(trans.string('Splash', 5), 8)
 
         # Load events
         self.LoadEventTabFromLevel()
@@ -17632,10 +17675,14 @@ def main():
     SLib.OutlineColor = theme.color('smi')
     SLib.main()
 
-    # load the splashscreen
-    app.splashscrn = None
-    if checkSplashEnabled():
-        loadSplash()
+    # Set the default window icon (used for random popups and stuff)
+    app.setWindowIcon(GetIcon('reggie'))
+    app.setApplicationDisplayName('Reggie Next')
+
+    # Load the splashscreen
+    app.splashScreen = ReggieSplashScreen()
+    app.splashScreen.setProgressLimit(9)
+    app.splashScreen.show()
 
     global EnableAlpha, GridType, CollisionsShown, DepthShown, RealViewEnabled
     global ObjectsFrozen, SpritesFrozen, EntrancesFrozen, LocationsFrozen, PathsFrozen, CommentsFrozen
@@ -17678,6 +17725,10 @@ def main():
     mainWindow = ReggieWindow()
     mainWindow.__init2__() # fixes bugs
     mainWindow.show()
+
+    app.splashScreen.hide()
+    del app.splashScreen
+    
     exitcodesys = app.exec_()
     app.deleteLater()
     sys.exit(exitcodesys)
