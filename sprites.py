@@ -292,7 +292,25 @@ class SpriteImage_QuestionSwitch(SLib.SpriteImage_Static): # 104
 
     @staticmethod
     def loadImages():
-        SLib.loadIfNotInImageCache('QSwitch', 'q_switch.png')
+        # we need to cache 2 things, the regular switch, and the upside down one
+        image = SLib.GetImg('q_switch.png', True)
+        # now we set up a transform to turn the switch upside down
+        transform180 = QtGui.QTransform()
+        transform180.rotate(180)        
+        # now we store it
+        ImageCache['QSwitch'] = QtGui.QPixmap.fromImage(image)
+        ImageCache['QSwitchU'] = QtGui.QPixmap.fromImage(image.transformed(transform180))
+        
+    def dataChanged(self):
+        isflipped = self.parent.spritedata[5] & 1
+
+        if isflipped == 0:
+            self.image = ImageCache['QSwitch']
+        else:
+            self.image = ImageCache['QSwitchU']
+            
+        super().dataChanged()
+                  
 
 class SpriteImage_PSwitch(SLib.SpriteImage_Static): # 105
     def __init__(self, parent):
@@ -304,7 +322,25 @@ class SpriteImage_PSwitch(SLib.SpriteImage_Static): # 105
 
     @staticmethod
     def loadImages():
-        SLib.loadIfNotInImageCache('PSwitch', 'p_switch.png')        
+        # we need to cache 2 things, the regular switch, and the upside down one
+        image = SLib.GetImg('p_switch.png', True)
+        # now we set up a transform to turn the switch upside down
+        transform180 = QtGui.QTransform()
+        transform180.rotate(180)        
+        # now we store it
+        ImageCache['PSwitch'] = QtGui.QPixmap.fromImage(image)
+        ImageCache['PSwitchU'] = QtGui.QPixmap.fromImage(image.transformed(transform180))
+        
+    def dataChanged(self):
+        isflipped = self.parent.spritedata[5] & 1
+
+        if isflipped == 0:
+            self.image = ImageCache['PSwitch']
+        else:
+            self.image = ImageCache['PSwitchU']
+            
+        super().dataChanged()
+                  
 
 class SpriteImage_PipeUp(SLib.SpriteImage): # 139
     def __init__(self, parent, scale=3.75):
