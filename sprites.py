@@ -703,8 +703,10 @@ class SpriteImage_Fliprus(SLib.SpriteImage_StaticMultiple): # 441
 
     @staticmethod
     def loadImages():
-        SLib.loadIfNotInImageCache('FliprusL', 'fliprus_l.png')
-        SLib.loadIfNotInImageCache('FliprusR', 'fliprus_r.png')
+        fliprus = SLib.GetImg('fliprus.png', True)
+
+        ImageCache['FliprusL'] = QtGui.QPixmap.fromImage(fliprus)
+        ImageCache['FliprusR'] = QtGui.QPixmap.fromImage(fliprus.mirrored(True, False))
 
     def dataChanged(self):
         direction = self.parent.spritedata[4]
@@ -768,12 +770,12 @@ class SpriteImage_WaddleWing(SLib.SpriteImage_StaticMultiple): # 481
 
     @staticmethod
     def loadImages():
-        SLib.loadIfNotInImageCache('WaddlewingL', 'waddlewing_l.png')
-        SLib.loadIfNotInImageCache('WaddlewingR', 'waddlewing_r.png')
+        waddlewing = SLib.GetImg('waddlewing.png', True)
+
+        ImageCache['WaddlewingL'] = QtGui.QPixmap.fromImage(waddlewing)
+        ImageCache['WaddlewingR'] = QtGui.QPixmap.fromImage(waddlewing.mirrored(True, False))
 
     def dataChanged(self):
-
-        # shiz
         rawdir = self.parent.spritedata[5]
 
         if rawdir == 2:
