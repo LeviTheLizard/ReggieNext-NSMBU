@@ -649,7 +649,51 @@ class SpriteImage_MovingGrassPlatform(SLib.SpriteImage): # 499
         if width == 1 and height == 1:
             self.aux[0].setSize(0,0)
             return
-        self.aux[0].setSize(width * 60, height * 60)        
+        self.aux[0].setSize(width * 60, height * 60)
+
+class SpriteImage_Grrrol(SLib.SpriteImage_StaticMultiple): # 504
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['GrrrolSmall'],
+            )
+        
+        self.yOffset = -12
+        #self.xOffset = -6
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('GrrrolSmall', 'grrrol_small.png')          
+
+class SpriteImage_MiniPipeLeft(SLib.SpriteImage): # 517
+    def __init__(self, parent, scale=3.75):
+        super().__init__(parent, scale)
+        self.spritebox.shown = False
+        self.parent.setZValue(24999)
+        self.width = 32
+        self.pipeHeight = 60
+
+    @staticmethod
+    def loadImages():
+        ImageCache['MiniPipeTopGreen'] = SLib.GetImg('mini_pipe_green_left.png')
+        ImageCache['MiniPipeMiddleGreen'] = SLib.GetImg('mini_pipe_green_body.png')
+
+    def dataChanged(self):
+        super().dataChanged()
+
+        rawheight = (self.parent.spritedata[5] & 0x0F) + 1
+
+        self.pipeHeight = rawheight
+
+        self.height = self.pipeHeight * 16
+        self.xOffset = 16 - self.height
+
+    def paint(self, painter):
+        super().paint(painter)
+
+        painter.drawPixmap(0, 0, ImageCache['MiniPipeTopGreen'])
+        painter.drawTiledPixmap(60, 0, self.pipeHeight * 60 - 60, 120, ImageCache['MiniPipeMiddleGreen'])
 
 ################################################################
 ################################################################
@@ -690,4 +734,6 @@ ImageClasses = {
     481: SpriteImage_WaddleWing,
     496: SpriteImage_BoltControlledMovingCoin,
     499: SpriteImage_MovingGrassPlatform,
+    504: SpriteImage_Grrrol,
+#    517: SpriteImage_MiniPipeLeft,
     }
