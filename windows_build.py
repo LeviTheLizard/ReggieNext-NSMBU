@@ -27,8 +27,8 @@
 # Builds Reggie! to a Windows binary (*.exe)
 # Use the values below to configure the release:
 
-PackageName = 'reggie_next_m2a4_win32'
-Version = '0.14' # This must be a valid float in string format
+PackageName = 'reggie_nsmbu_041_alpha'
+Version = '0.41' # This must be a valid float in string format
 
 
 ################################################################
@@ -66,7 +66,7 @@ dir_ = 'distrib/' + PackageName
 printv('>> Build directory will be ' + dir_)
 
 # Print some stuff
-print('[[ Freezing Reggie! Next ]]')
+print('[[ Freezing Reggie! NSMBU ]]')
 print('>> Destination directory: %s' % dir_)
 
 # Add the "build" parameter to the system argument list
@@ -89,9 +89,9 @@ excludes = ['doctest', 'pdb', 'unittest', 'difflib', 'inspect',
 printv('>> Running build functions...')
 base = 'Win32GUI' if sys.platform == 'win32' else None
 setup(
-    name = 'Reggie! Level Editor Next',
+    name = 'Reggie! NSMBU',
     version = Version,
-    description = 'Reggie! Level Editor Next',
+    description = 'Reggie! NSMBU',
     options={
         'build_exe': {
             'excludes': excludes,

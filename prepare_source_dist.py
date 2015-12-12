@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
 
 # Reggie! - New Super Mario Bros. U Level Editor
 # Version v0.3 ALPHA
@@ -27,7 +26,7 @@
 # Prepares the source distribution of Reggie!
 
 # Use the values below to configure the release:
-PackageName = 'reggie_next_m2a4_src'
+PackageName = 'reggie_nsmbu_041_alpha_src'
 
 
 ################################################################
@@ -51,10 +50,7 @@ folders = (
 files = (
     
     # alphabetical
-    ('archive.py', dir_),
     ('common.py', dir_),
-    ('LHdec.py', dir_),
-    ('LHDecompressor.exe', dir_),
     ('lz77.py', dir_),
     ('prepare_source_dist.py', dir_),
     ('pyqtribbon.py', dir_),
@@ -64,9 +60,6 @@ files = (
 
     ('license.txt', dir_),
     ('readme.txt', dir_),
-    
-    ('nsmblib-0.5a.tar.gz', dir_),
-    ('nsmblib-0.5a.zip', dir_),
     )
 errors = []
 for folder, folderdir in folders:
