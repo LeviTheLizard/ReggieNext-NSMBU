@@ -2,7 +2,7 @@
 # -*- coding: latin-1 -*-
 
 # Reggie! - New Super Mario Bros. U Level Editor
-# Version v0.3 ALPHA
+# Version v0.4 ALPHA
 # Copyright (C) 2009-2015 Treeki, Tempus, angelsl, JasonP27, Kamek64,
 # MalStar1000, RoadrunnerWMC, MrRean
 
@@ -302,7 +302,7 @@ def swapRB(bgra):
     Swaps R and B.
     Based on Wii U GTX Extractor.
     """
-    return bytes((bgra[2], bgra[1], bgra[0], 255))#bgra[3]))
+    return bytes((bgra[2], bgra[1], bgra[0], bgra[3]))
 
 
 def renderDXT5(gtx, threadSleepSecs):

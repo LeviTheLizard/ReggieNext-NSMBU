@@ -108,18 +108,18 @@ def LoadBasicSuite():
 
     # Load some coins, because coins are in almost every Mario level ever
     ImageCache['Coin'] = GetImg('coin.png')
-    ImageCache['SpecialCoin'] = GetImg('special_coin.png')
-    ImageCache['PCoin'] = GetImg('p_coin.png')
-    ImageCache['RedCoin'] = GetImg('redcoin.png')
-    ImageCache['StarCoin'] = GetImg('star_coin.png')
+    #ImageCache['SpecialCoin'] = GetImg('special_coin.png')
+    #ImageCache['PCoin'] = GetImg('p_coin.png')
+    #ImageCache['RedCoin'] = GetImg('redcoin.png')
+    #ImageCache['StarCoin'] = GetImg('star_coin.png')
 
     # Load blocks
-    BlockImage = GetImg('blocks.png')
-    Blocks = []
-    for y in range(BlockImage.height() // TileWidth):
-        for x in range(BlockImage.width() // TileWidth):
-            Blocks.append(BlockImage.copy(x * TileWidth, y * TileWidth, TileWidth, TileWidth))
-    ImageCache['Blocks'] = Blocks
+    #BlockImage = GetImg('blocks.png')
+    #Blocks = []
+    #for y in range(BlockImage.height() // TileWidth):
+    #    for x in range(BlockImage.width() // TileWidth):
+    #        Blocks.append(BlockImage.copy(x * TileWidth, y * TileWidth, TileWidth, TileWidth))
+    #ImageCache['Blocks'] = Blocks
     ImageCache['InvisiBlock'] = GetImg('block_invisible.png')
 
     # Load contents of blocks
@@ -141,10 +141,10 @@ def LoadBasicSuite():
     ImageCache['Overrides'] = Blocks
 
     # Load the characters
-    for num in range(4):
-        for direction in 'lr':
-            ImageCache['Character%d%s' % (num + 1, direction.upper())] = \
-                GetImg('character_%d_%s.png' % (num + 1, direction))
+    #for num in range(4):
+    #    for direction in 'lr':
+    #        ImageCache['Character%d%s' % (num + 1, direction.upper())] = \
+    #            GetImg('character_%d_%s.png' % (num + 1, direction))
 
     # Load vines, because these are used by entrances
     loadIfNotInImageCache('VineTop', 'vine_top.png')
@@ -244,7 +244,7 @@ class SpriteImage_Static(SpriteImage):
     """
     A simple class for drawing a static sprite image
     """
-    def __init__(self, parent, scale=1.5, image=None, offset=None):
+    def __init__(self, parent, scale=3.75, image=None, offset=None):
         super().__init__(parent, scale)
         self.image = image
         self.spritebox.shown = False
@@ -456,7 +456,7 @@ class AuxiliaryTrackObject(AuxiliarySpriteItem):
 
     def setSize(self, width, height):
         self.prepareGeometryChange()
-        self.BoundingRect = QtCore.QRectF(0, 0, width * 1.5, height * 1.5)
+        self.BoundingRect = QtCore.QRectF(0, 0, width * 3.75, height * 3.75)
         self.width = width
         self.height = height
 
@@ -834,3 +834,4 @@ class AuxiliaryLocationItem(AuxiliaryItem, QtWidgets.QGraphicsItem):
         Required for Qt
         """
         return self.BoundingRect
+
