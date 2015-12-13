@@ -6627,7 +6627,7 @@ class SpritePickerWidget(QtWidgets.QTreeWidget):
         """
         Changes the selected sprite view
         """
-        for i in range(1, self.topLevelItemCount()):
+        for i in range(0, self.topLevelItemCount()):
             self.topLevelItem(i).setHidden(True)
 
         for node in view[2]:
@@ -7533,7 +7533,7 @@ class PathNodeEditorWidget(QtWidgets.QWidget):
 
         self.unk1 = QtWidgets.QSpinBox()
         self.unk1.setRange(-127, 127)
-        self.unk1.setToolTip(trans.string('PathDataEditor', 7))
+        self.unk1.setToolTip(trans.string('PathDataEditor', 12))
         self.unk1.valueChanged.connect(self.Handleunk1Changed)
         self.unk1.setMaximumWidth(256)        
 

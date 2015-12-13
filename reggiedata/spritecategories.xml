@@ -60,8 +60,20 @@
         <category name="200-299">
             <attach sprite="200-299"/>
         </category>
-        <category name="300-325">
-            <attach sprite="300-325"/>
+        <category name="300-399">
+            <attach sprite="300-399"/>
+        </category>
+        <category name="400-499">
+            <attach sprite="400-499"/>
+        </category>
+        <category name="500-599">
+            <attach sprite="500-599"/>
+        </category>
+        <category name="600-699">
+            <attach sprite="600-699"/>
+        </category>
+        <category name="700-723">
+            <attach sprite="700-723"/>
         </category>
     </view>
 	<view name="Unused">
