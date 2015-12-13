@@ -2,4 +2,4 @@ Reggie! Next NSMBU - a supercharged fork of the modern level editor
 
 Copyright (C) 2015 Treeki, Tempus, angelsl, JasonP27, Kinnay, MalStar1000, RoadrunnerWMC, MrRean, Grop
 
-Development forums: http://rhcafse.us.to/
+Development forums: http://rhcafe.us.to/
