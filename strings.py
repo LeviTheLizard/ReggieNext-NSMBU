@@ -548,6 +548,7 @@ class ReggieTranslation():
                 9: '[b]Node [id][/b]',
                 10: 'Modify Selected Path Node Properties',
                 11: 'Unknown 0x01:',
+                12: '[b]Unknown 0x01:[/b][br]No idea what this is', 
                 },
             'Paths': {
                 0: '[b]Path [path][/b][br]Node [node]',
