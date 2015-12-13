@@ -6627,7 +6627,7 @@ class SpritePickerWidget(QtWidgets.QTreeWidget):
         """
         Changes the selected sprite view
         """
-        for i in range(1, self.topLevelItemCount()):
+        for i in range(0, self.topLevelItemCount()):
             self.topLevelItem(i).setHidden(True)
 
         for node in view[2]:
