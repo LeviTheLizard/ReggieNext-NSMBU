@@ -113,15 +113,6 @@ def LoadBasicSuite():
     #ImageCache['RedCoin'] = GetImg('redcoin.png')
     #ImageCache['StarCoin'] = GetImg('star_coin.png')
 
-    # Load blocks
-    #BlockImage = GetImg('blocks.png')
-    #Blocks = []
-    #for y in range(BlockImage.height() // TileWidth):
-    #    for x in range(BlockImage.width() // TileWidth):
-    #        Blocks.append(BlockImage.copy(x * TileWidth, y * TileWidth, TileWidth, TileWidth))
-    #ImageCache['Blocks'] = Blocks
-    ImageCache['InvisiBlock'] = GetImg('block_invisible.png')
-
     # Load contents of blocks
     ItemImage = GetImg('block_contents.png')
     Items = []
@@ -129,6 +120,7 @@ def LoadBasicSuite():
         for x in range(ItemImage.width() // TileWidth):
             Items.append(ItemImage.copy(x * TileWidth, y * TileWidth, TileWidth, TileWidth))
     ImageCache['Items'] = Items
+    ImageCache['InvisiBlock'] = GetImg('block_invisible.png')
 
     # Load the overrides
     Overrides = QtGui.QPixmap('reggiedata/overrides.png')
@@ -343,26 +335,27 @@ class Spritebox():
         'Convenience property that provides access to self.xOffset, self.yOffset, self.width and self.height in one tuple',
         )
 
-    # RoundedRect property
+    # Rect property
     def getRR(self):
         return QtCore.QRectF(
-            (self.xOffset * self.scale) + (2/3) * self.scale,
-            (self.yOffset * self.scale) + (2/3) * self.scale,
-            (self.width * self.scale) - (4/3) * self.scale,
-            (self.height * self.scale) - (4/3) * self.scale,
+            self.xOffset * self.scale,
+            self.yOffset * self.scale,
+            self.width * self.scale,
+            self.height * self.scale,
             )
     def setRR(self, new):
         self.dimensions = (
-            (new.x() / self.scale) - (2/3) * self.scale,
-            (new.y() / self.scale) - (2/3) * self.scale,
-            (new.width() / self.scale) + (4/3) * self.scale,
-            (new.height() / self.scale) + (4/3) * self.scale,
+            new.x() * self.scale,
+            new.y() * self.scale,
+            new.width() * self.scale,
+            new.height() * self.scale,
             )
     def delRR(self):
         self.dimensions = 0, 0, 16, 16
+
     RoundedRect = property(
         getRR, setRR, delRR,
-        'Property that contains the rounded rect for the spritebox',
+        'Property that contains the rect for the spritebox',
         )
 
     # BoundingRect property
@@ -391,7 +384,7 @@ class Spritebox():
 ################################################################
 ################################################################
 ################################################################
-#################### AuxiliarySpriteItem Classes #####################
+################# AuxiliarySpriteItem Classes ##################
 
 
 class AuxiliaryItem():
