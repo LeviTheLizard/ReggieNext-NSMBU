@@ -7533,7 +7533,7 @@ class PathNodeEditorWidget(QtWidgets.QWidget):
 
         self.unk1 = QtWidgets.QSpinBox()
         self.unk1.setRange(-127, 127)
-        self.unk1.setToolTip(trans.string('PathDataEditor', 7))
+        self.unk1.setToolTip(trans.string('PathDataEditor', 12))
         self.unk1.valueChanged.connect(self.Handleunk1Changed)
         self.unk1.setMaximumWidth(256)        
 
