@@ -108,19 +108,10 @@ def LoadBasicSuite():
 
     # Load some coins, because coins are in almost every Mario level ever
     ImageCache['Coin'] = GetImg('coin.png')
-    ImageCache['SpecialCoin'] = GetImg('special_coin.png')
-    ImageCache['PCoin'] = GetImg('p_coin.png')
-    ImageCache['RedCoin'] = GetImg('redcoin.png')
-    ImageCache['StarCoin'] = GetImg('star_coin.png')
-
-    # Load blocks
-    BlockImage = GetImg('blocks.png')
-    Blocks = []
-    for y in range(BlockImage.height() // TileWidth):
-        for x in range(BlockImage.width() // TileWidth):
-            Blocks.append(BlockImage.copy(x * TileWidth, y * TileWidth, TileWidth, TileWidth))
-    ImageCache['Blocks'] = Blocks
-    ImageCache['InvisiBlock'] = GetImg('block_invisible.png')
+    #ImageCache['SpecialCoin'] = GetImg('special_coin.png')
+    #ImageCache['PCoin'] = GetImg('p_coin.png')
+    #ImageCache['RedCoin'] = GetImg('redcoin.png')
+    #ImageCache['StarCoin'] = GetImg('star_coin.png')
 
     # Load contents of blocks
     ItemImage = GetImg('block_contents.png')
@@ -129,6 +120,7 @@ def LoadBasicSuite():
         for x in range(ItemImage.width() // TileWidth):
             Items.append(ItemImage.copy(x * TileWidth, y * TileWidth, TileWidth, TileWidth))
     ImageCache['Items'] = Items
+    ImageCache['InvisiBlock'] = GetImg('block_invisible.png')
 
     # Load the overrides
     Overrides = QtGui.QPixmap('reggiedata/overrides.png')
@@ -141,10 +133,10 @@ def LoadBasicSuite():
     ImageCache['Overrides'] = Blocks
 
     # Load the characters
-    for num in range(4):
-        for direction in 'lr':
-            ImageCache['Character%d%s' % (num + 1, direction.upper())] = \
-                GetImg('character_%d_%s.png' % (num + 1, direction))
+    #for num in range(4):
+    #    for direction in 'lr':
+    #        ImageCache['Character%d%s' % (num + 1, direction.upper())] = \
+    #            GetImg('character_%d_%s.png' % (num + 1, direction))
 
     # Load vines, because these are used by entrances
     loadIfNotInImageCache('VineTop', 'vine_top.png')
@@ -244,7 +236,7 @@ class SpriteImage_Static(SpriteImage):
     """
     A simple class for drawing a static sprite image
     """
-    def __init__(self, parent, scale=1.5, image=None, offset=None):
+    def __init__(self, parent, scale=3.75, image=None, offset=None):
         super().__init__(parent, scale)
         self.image = image
         self.spritebox.shown = False
@@ -343,26 +335,27 @@ class Spritebox():
         'Convenience property that provides access to self.xOffset, self.yOffset, self.width and self.height in one tuple',
         )
 
-    # RoundedRect property
+    # Rect property
     def getRR(self):
         return QtCore.QRectF(
-            (self.xOffset * self.scale) + (2/3) * self.scale,
-            (self.yOffset * self.scale) + (2/3) * self.scale,
-            (self.width * self.scale) - (4/3) * self.scale,
-            (self.height * self.scale) - (4/3) * self.scale,
+            self.xOffset * self.scale,
+            self.yOffset * self.scale,
+            self.width * self.scale,
+            self.height * self.scale,
             )
     def setRR(self, new):
         self.dimensions = (
-            (new.x() / self.scale) - (2/3) * self.scale,
-            (new.y() / self.scale) - (2/3) * self.scale,
-            (new.width() / self.scale) + (4/3) * self.scale,
-            (new.height() / self.scale) + (4/3) * self.scale,
+            new.x() * self.scale,
+            new.y() * self.scale,
+            new.width() * self.scale,
+            new.height() * self.scale,
             )
     def delRR(self):
         self.dimensions = 0, 0, 16, 16
+
     RoundedRect = property(
         getRR, setRR, delRR,
-        'Property that contains the rounded rect for the spritebox',
+        'Property that contains the rect for the spritebox',
         )
 
     # BoundingRect property
@@ -391,7 +384,7 @@ class Spritebox():
 ################################################################
 ################################################################
 ################################################################
-#################### AuxiliarySpriteItem Classes #####################
+################# AuxiliarySpriteItem Classes ##################
 
 
 class AuxiliaryItem():
@@ -456,7 +449,7 @@ class AuxiliaryTrackObject(AuxiliarySpriteItem):
 
     def setSize(self, width, height):
         self.prepareGeometryChange()
-        self.BoundingRect = QtCore.QRectF(0, 0, width * 1.5, height * 1.5)
+        self.BoundingRect = QtCore.QRectF(0, 0, width * 3.75, height * 3.75)
         self.width = width
         self.height = height
 
@@ -834,3 +827,4 @@ class AuxiliaryLocationItem(AuxiliaryItem, QtWidgets.QGraphicsItem):
         Required for Qt
         """
         return self.BoundingRect
+

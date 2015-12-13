@@ -41,8 +41,8 @@
     <value nybble="20" title="Unknown Value 20"/>
   </sprite>
   <sprite id="15" name="Grounded Venus Fire Trap">
-    <value nybble="11" title="Unknown Value 11"/>
-    <value nybble="12" title="Rotation" comment="Sets the direction of the piranha plant. 0 is up, every value rotates the piranha 22.5 degrees to the right."/>
+    <value nybble="11" title="Placement difference (Up)" comment="Will move the piranha plant up, depending on the value you give it. (Value - .5)"/>
+    <value nybble="12" title="Rotation" comment="Sets the direction of the piranha plant. 0 is up, every value rotates the piranha 22.5 degrees to the right. (Value * 22.5)"/>
     <value nybble="17" title="Unknown Value 17"/>
     <value nybble="20" title="Unknown Value 20"/>
   </sprite>
@@ -211,7 +211,6 @@
       <entry value="5">Down + left</entry>
       <entry value="6">Down</entry>
       <entry value="7">Down + right</entry>
-      <entry value="8">UNUSED</entry>
     </list>
     <checkbox nybble="13" title="Nothing." comment="Does nothing."/>
     <value nybble="16" title="Unknown Value 16"/>
@@ -655,18 +654,30 @@
     <value nybble="20" title="Height" comment="Height of the block."/>
     <value nybble="21-22" title="Movement ID" comment="The movement ID of the sprite. "/>
   </sprite>
-  <sprite id="73" name="Coin Spawner">
+  <sprite id="73" name="Coin Spawner" notes="Spawns coins. To spawn a snake of coins in a small arc, &#13;&#10;0000 0000 0103 0002 0010 0000 use this spritedata.">
     <value nybble="3-4" title="Triggering Event ID" comment="Coins are spawned when this Event is triggered."/>
     <value nybble="5" title="Unknown Value 5"/>
-    <value nybble="10" title="Unknown Value 10"/>
-    <value nybble="12" title="Unknown Value 12"/>
-    <value nybble="13" title="Unknown Value 13"/>
-    <value nybble="14" title="Unknown Value 14"/>
-    <value nybble="15" title="Unknown Value 15"/>
-    <value nybble="16" title="Unknown Value 16"/>
-    <value nybble="18" title="Unknown Value 18"/>
+    <value nybble="10" title="Delay between bursts" comment="The delay between emissions of coins. 0 is instant, 15 is very slow."/>
+    <value nybble="12" title="Multiplier" comment="How many times you want the same amount of coins in nybble 18 to spawn. (Value + 1)"/>
+    <checkbox nybble="13" title="Reverse Pairs" comment="When checked, rather than have an odd number of coins (if nybble 18 is even w/o the +1) on the left, the odd pair goes to the right."/>
+    <list nybble="14" title="Type" comment="0 just falls like regular coins. 1 and 2 are barely noticable in differences.">
+      <entry value="0">Chunk</entry>
+      <entry value="1">Curve (lower)</entry>
+      <entry value="2">Curve (higher)</entry>
+    </list>
+    <list nybble="15" title="2-Coin Spacing Decrease" comment="The decrease in space per coins of 2 when spawned. http://i.imgur.com/fejqkpu.jpg for reference.">
+      <entry value="0">1 Block</entry>
+      <entry value="1">.5 Blocks</entry>
+      <entry value="2">.1 Blocks</entry>
+    </list>
+    <list nybble="16" title="Spawn Height" comment="The height the spawned coins reach.">
+      <entry value="0">3 Blocks</entry>
+      <entry value="1">6 Blocks</entry>
+      <entry value="2">7 Blocks</entry>
+    </list>
+    <value nybble="18" title="Coins Spawned" comment="The amount of coins spawned. (Value + 1)"/>
     <value nybble="19" title="Unknown Value 19"/>
-    <value nybble="21" title="Unknown Value 21"/>
+    <value nybble="21-22" title="Movement ID" comment="Attatch this ID to a movement controller to make it spawn at angles."/>
   </sprite>
   <sprite id="74" name="Huckit Crab" notes="A crab that chucks rocks.">
     <checkbox nybble="11" title="Stationary" comment="Makes the crab not hop backwards if checked."/>
@@ -2575,7 +2586,8 @@
   </sprite>
   <sprite id="363" name="Treasure Chest" notes="A treasure chest!">
     <value nybble="7" title="Unknown Value 7"/>
-    <value nybble="12" title="Unknown Value 12"/>
+    <value nybble="10" title="Unknown Value 10" comment="Always 1"/>
+    <value nybble="12" title="Unknown Value 12" comment="10 if in Worlds 1-3,  9 if in Worlds 4-7"/>
   </sprite>
   <sprite id="364" name="Raining Debris Spawner" notes="The burning meteorites that fall from the sky. Be careful, if you touch them, you die.">
     <value nybble="6" title="Unknown Value 6"/>
@@ -2976,12 +2988,15 @@
     <value nybble="12" title="Unknown Value 12"/>
   </sprite>
   <sprite id="441" name="Fliprus" notes="Actor: 0x22e">
-    <value nybble="3" title="Unknown Value 3"/>
-    <value nybble="4" title="Unknown Value 4"/>
+    <value nybble="3-4" title="Target Event ID" comment="When the Fliprus is defeated, this event will activate."/>
     <value nybble="5" title="Unknown Value 5"/>
-    <value nybble="10" title="Unknown Value 10"/>
+    <list nybble="10" title="Direction" comment="The direction the fliprus faces.">
+      <entry value="0">Towards Player</entry>
+      <entry value="1">Right</entry>
+      <entry value="2"> Left</entry>
+    </list>
     <value nybble="11" title="Unknown Value 11"/>
-    <value nybble="12" title="Unknown Value 12"/>
+    <checkbox nybble="12" title="Delayed Throw" comment="When checked, the Fliprus will have a delay in throwing the snowball."/>
   </sprite>
   <sprite id="442" name="UNKNOWN SPRITE">
     <value nybble="5" title="Unknown Value 5" comment="Always 3..."/>
@@ -3441,8 +3456,8 @@
       <entry value="3">6 Blocks?</entry>
     </list>
   </sprite>
-  <sprite id="554" name="UNKNOWN SPRITE">
-    <value nybble="6" title="Unknown Value 6"/>
+  <sprite id="554" name="Location-based button hint" notes="When the player is in the location specified, the image of a button will appear. Might have different button images.">
+    <value nybble="5-6" title="Location ID"/>
   </sprite>
   <sprite id="555" name="CRASHING SPRITE [UNUSED]"/>
   <sprite id="556" name="Bubble Baby Yoshi for Credits [UNUSED]"/>

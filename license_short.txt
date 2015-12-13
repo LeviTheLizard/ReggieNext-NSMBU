@@ -1,4 +1,4 @@
-Reggie! NSMBU - a supercharged fork of the modern level editor 
+Reggie! Next NSMBU - a supercharged fork of the modern level editor 
 
 Copyright (C) 2015 Treeki, Tempus, angelsl, JasonP27, Kinnay, MalStar1000, RoadrunnerWMC, MrRean, Grop
 
