@@ -2,9 +2,9 @@
 # -*- coding: latin-1 -*-
 
 # Reggie! - New Super Mario Bros. U Level Editor
-# Version v0.3 ALPHA
+# Version v0.4 ALPHA
 # Copyright (C) 2009-2015 Treeki, Tempus, angelsl, JasonP27, Kamek64,
-# MalStar1000, RoadrunnerWMC, MrRean
+# MalStar1000, RoadrunnerWMC, MrRean and Grop
 
 # This file is part of Reggie!.
 
@@ -95,10 +95,61 @@ if not hasattr(QtWidgets.QGraphicsItem, 'ItemSendsGeometryChanges'):
 
 
 # Globals
+generateStringsXML = False
 app = None
 mainWindow = None
 settings = None
-
+defaultStyle = None
+defaultPalette = None
+compressed = False
+LevelNames = None
+TilesetNames = None
+ObjDesc = None
+SpriteCategories = None
+SpriteListData = None
+EntranceTypeNames = None
+Tiles = None # 0x200 tiles per tileset, plus 64 for each type of override
+TilesetFilesLoaded = [None, None, None, None]
+TilesetAnimTimer = None
+TilesetCache = {} # Tileset cache, to avoid reloading when possible
+TilesetCompletelyCached = {}
+TileThreads = [None, None, None, None] # holds tileset-rendering threads
+Overrides = None # 320 tiles, this is put into Tiles usually
+TileBehaviours = None
+ObjectDefinitions = None # 4 tilesets
+TilesetsAnimating = False
+Area = None
+Dirty = False
+DirtyOverride = 0
+AutoSaveDirty = False
+OverrideSnapping = False
+CurrentPaintType = -1
+CurrentObject = -1
+CurrentSprite = -1
+CurrentLayer = 1
+Layer0Shown = True
+Layer1Shown = True
+Layer2Shown = True
+SpritesShown = True
+SpriteImagesShown = True
+RealViewEnabled = False
+LocationsShown = True
+CommentsShown = True
+ObjectsFrozen = False
+SpritesFrozen = False
+EntrancesFrozen = False
+LocationsFrozen = False
+PathsFrozen = False
+CommentsFrozen = False
+PaintingEntrance = None
+PaintingEntranceListIndex = None
+NumberFont = None
+GridType = None
+RestoredFromAutoSave = False
+AutoSavePath = ''
+AutoSaveData = b''
+AutoOpenScriptEnabled = False
+CurrentLevelNameForAutoOpenScript = 'AAAAAAAAAAAAAAAAAAAAAAAAAA'
 
 # Game enums
 NewSuperMarioBrosU = 0
@@ -111,6 +162,10 @@ FirstLevels = {
     NewSuperMarioBrosU: '1-1',
     NewSuperLuigiU: '1-1',
     }
+
+#####################################################################
+############################# UI-THINGS #############################
+#####################################################################
 
 class ReggieSplashScreen(QtWidgets.QSplashScreen):
     """
@@ -266,6 +321,405 @@ class ReggieSplashScreen(QtWidgets.QSplashScreen):
         with open('license_short.txt', 'r') as copyFile:
             drawText(copyFile.read(), *self.copyrightFontInfo)
 
+
+class ChooseLevelNameDialog(QtWidgets.QDialog):
+    """
+    Dialog which lets you choose a level from a list
+    """
+    def __init__(self):
+        """
+        Creates and initializes the dialog
+        """
+        QtWidgets.QDialog.__init__(self)
+        self.setWindowTitle(trans.string('OpenFromNameDlg', 0))
+        self.setWindowIcon(GetIcon('open'))
+        LoadLevelNames()
+        self.currentlevel = None
+
+        # create the tree
+        tree = QtWidgets.QTreeWidget()
+        tree.setColumnCount(1)
+        tree.setHeaderHidden(True)
+        tree.setIndentation(16)
+        tree.currentItemChanged.connect(self.HandleItemChange)
+        tree.itemActivated.connect(self.HandleItemActivated)
+
+        # add items (LevelNames is effectively a big category)
+        tree.addTopLevelItems(self.ParseCategory(LevelNames))
+
+        # assign it to self.leveltree
+        self.leveltree = tree
+
+        # create the buttons
+        self.buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        self.buttonBox.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(False)
+
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+
+        # create the layout
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(self.leveltree)
+        layout.addWidget(self.buttonBox)
+
+        self.setLayout(layout)
+        self.layout = layout
+
+        self.setMinimumWidth(320) # big enough to fit "World 5: Freezeflame Volcano/Freezeflame Glacier"
+        self.setMinimumHeight(384)
+
+    def ParseCategory(self, items):
+        """
+        Parses a XML category
+        """
+        nodes = []
+        for item in items:
+            node = QtWidgets.QTreeWidgetItem()
+            node.setText(0, item[0])
+            # see if it's a category or a level
+            if isinstance(item[1], str):
+                # it's a level
+                node.setData(0, Qt.UserRole, item[1])
+                node.setToolTip(0, item[1] + '.szs')
+            else:
+                # it's a category
+                children = self.ParseCategory(item[1])
+                for cnode in children:
+                    node.addChild(cnode)
+                node.setToolTip(0, item[0])
+            nodes.append(node)
+        return tuple(nodes)
+
+    @QtCore.pyqtSlot(QtWidgets.QTreeWidgetItem, QtWidgets.QTreeWidgetItem)
+    def HandleItemChange(self, current, previous):
+        """
+        Catch the selected level and enable/disable OK button as needed
+        """
+        self.currentlevel = current.data(0, Qt.UserRole)
+        if self.currentlevel is None:
+            self.buttonBox.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(False)
+        else:
+            self.buttonBox.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(True)
+            self.currentlevel = str(self.currentlevel)
+
+
+    @QtCore.pyqtSlot(QtWidgets.QTreeWidgetItem, int)
+    def HandleItemActivated(self, item, column):
+        """
+        Handle a doubleclick on a level
+        """
+        self.currentlevel = item.data(0, Qt.UserRole)
+        if self.currentlevel is not None:
+            self.currentlevel = str(self.currentlevel)
+            self.accept()
+
+
+class ReggieTheme():
+    """
+    Class that represents a Reggie theme
+    """
+    def __init__(self, file=None):
+        """
+        Initializes the theme
+        """
+        self.initAsClassic()
+        if file is not None: self.initFromFile(file)
+
+
+    def initAsClassic(self):
+        """
+        Initializes the theme as the hardcoded Classic theme
+        """
+        self.fileName = 'Classic'
+        self.formatver = 1.0
+        self.version = 1.0
+        self.themeName = trans.string('Themes', 0)
+        self.creator = trans.string('Themes', 1)
+        self.description = trans.string('Themes', 2)
+        self.iconCacheSm = {}
+        self.iconCacheLg = {}
+        self.style = None
+
+        # Add the colors                                               # Descriptions:
+        self.colors = {
+            'bg':                      QtGui.QColor(119,136,153),     # Main scene background fill
+            'comment_fill':            QtGui.QColor(220,212,135,120), # Unselected comment fill
+            'comment_fill_s':          QtGui.QColor(254,240,240,240), # Selected comment fill
+            'comment_lines':           QtGui.QColor(192,192,192,120), # Unselected comment lines
+            'comment_lines_s':         QtGui.QColor(220,212,135,240), # Selected comment lines
+            'depth_highlight':         QtGui.QColor(243,243,21,191),  # Tileset 3D effect highlight (NSMBU)
+            'entrance_fill':           QtGui.QColor(190,0,0,120),     # Unselected entrance fill
+            'entrance_fill_s':         QtGui.QColor(190,0,0,240),     # Selected entrance fill
+            'entrance_lines':          QtGui.QColor(0,0,0),           # Unselected entrance lines
+            'entrance_lines_s':        QtGui.QColor(255,255,255),     # Selected entrance lines
+            'grid':                    QtGui.QColor(255,255,255,100), # Grid
+            'location_fill':           QtGui.QColor(114,42,188,70),   # Unselected location fill
+            'location_fill_s':         QtGui.QColor(170,128,215,100), # Selected location fill
+            'location_lines':          QtGui.QColor(0,0,0),           # Unselected location lines
+            'location_lines_s':        QtGui.QColor(255,255,255),     # Selected location lines
+            'location_text':           QtGui.QColor(255,255,255),     # Location text
+            'object_fill_s':           QtGui.QColor(255,255,255,64),  # Select object fill
+            'object_lines_s':          QtGui.QColor(255,255,255),     # Selected object lines
+            'overview_entrance':       QtGui.QColor(255,0,0),         # Overview entrance fill
+            'overview_location_fill':  QtGui.QColor(114,42,188,50),   # Overview location fill
+            'overview_location_lines': QtGui.QColor(0,0,0),           # Overview location lines
+            'overview_object':         QtGui.QColor(255,255,255),     # Overview object fill
+            'overview_sprite':         QtGui.QColor(0,92,196),        # Overview sprite fill
+            'overview_viewbox':        QtGui.QColor(0,0,255),         # Overview background fill
+            'overview_zone_fill':      QtGui.QColor(47,79,79,120),    # Overview zone fill
+            'overview_zone_lines':     QtGui.QColor(0,255,255),       # Overview zone lines
+            'path_connector':          QtGui.QColor(6,249,20),        # Path node connecting lines
+            'path_fill':               QtGui.QColor(6,249,20,120),    # Unselected path node fill
+            'path_fill_s':             QtGui.QColor(6,249,20,240),    # Selected path node fill
+            'path_lines':              QtGui.QColor(0,0,0),           # Unselected path node lines
+            'path_lines_s':            QtGui.QColor(255,255,255),     # Selected path node lines
+            'smi':                     QtGui.QColor(255,255,255,80),  # Sprite movement indicator
+            'sprite_fill_s':           QtGui.QColor(255,255,255,64),  # Selected sprite w/ image fill
+            'sprite_lines_s':          QtGui.QColor(255,255,255),     # Selected sprite w/ image lines
+            'spritebox_fill':          QtGui.QColor(0,92,196,120),    # Unselected sprite w/o image fill
+            'spritebox_fill_s':        QtGui.QColor(0,92,196,240),    # Selected sprite w/o image fill
+            'spritebox_lines':         QtGui.QColor(0,0,0),           # Unselected sprite w/o image fill
+            'spritebox_lines_s':       QtGui.QColor(255,255,255),     # Selected sprite w/o image fill
+            'zone_entrance_helper':    QtGui.QColor(190,0,0,120),     # Zone entrance-placement left border indicator
+            'zone_lines':              QtGui.QColor(145,200,255,176), # Zone lines
+            'zone_corner':             QtGui.QColor(255,255,255),     # Zone grabbers/corners
+            'zone_dark_fill':          QtGui.QColor(0,0,0,48),        # Zone fill when dark
+            'zone_text':               QtGui.QColor(44,64,84),        # Zone text
+            }
+
+    def initFromFile(self, file):
+        """
+        Initializes the theme from the file
+        """
+        try:
+            zipf = zipfile.ZipFile(file, 'r')
+            zipfList = zipf.namelist()
+        except Exception:
+            # Can't load the data for some reason
+            return
+        try:
+            mainxmlfile = zipf.open('main.xml')
+        except KeyError:
+            # There's no main.xml in the file
+            return
+
+        # Create a XML ElementTree
+        try: maintree = etree.parse(mainxmlfile)
+        except Exception: return
+        root = maintree.getroot()
+
+        # Parse the attributes of the <theme> tag
+        if not self.parseMainXMLHead(root):
+            # The attributes are messed up
+            return
+
+        # Parse the other nodes
+        for node in root:
+            if node.tag.lower() == 'colors':
+                if 'file' not in node.attrib: continue
+
+                # Load the colors XML
+                try:
+                    self.loadColorsXml(zipf.open(node.attrib['file']))
+                except Exception: continue
+
+            elif node.tag.lower() == 'stylesheet':
+                if 'file' not in node.attrib: continue
+
+                # Load the stylesheet
+                try:
+                    self.loadStylesheet(zipf.open(node.attrib['file']))
+                except Exception: continue
+
+            elif node.tag.lower() == 'icons':
+                if not all(thing in node.attrib for thing in ['size', 'folder']): continue
+
+                foldername = node.attrib['folder']
+                big = node.attrib['size'].lower()[:2] == 'lg'
+                cache = self.iconCacheLg if big else self.iconCacheSm
+
+                # Load the icons
+                for iconfilename in zipfList:
+                    iconname = iconfilename
+                    if not iconname.startswith(foldername + '/'): continue
+                    iconname = iconname[len(foldername)+1:]
+                    if len(iconname) <= len('icon-.png'): continue
+                    if not iconname.startswith('icon-') or not iconname.endswith('.png'): continue
+                    iconname = iconname[len('icon-'): -len('.png')]
+
+                    icodata = zipf.open(iconfilename).read()
+                    pix = QtGui.QPixmap()
+                    if not pix.loadFromData(icodata): continue
+                    ico = QtGui.QIcon(pix)
+
+                    cache[iconname] = ico
+
+    def parseMainXMLHead(self, root):
+        """
+        Parses the main attributes of main.xml
+        """
+        MaxSupportedXMLVersion = 1.0
+
+        # Check for required attributes
+        if root.tag.lower() != 'theme': return False
+        if 'format' in root.attrib:
+            formatver = root.attrib['format']
+            try: self.formatver = float(formatver)
+            except ValueError: return False
+        else: return False
+
+        if self.formatver > MaxSupportedXMLVersion: return False
+        if 'name' in root.attrib: self.themeName = root.attrib['name']
+        else: return False
+
+        # Check for optional attributes
+        self.creator = trans.string('Themes', 3)
+        self.description = trans.string('Themes', 4)
+        self.style = None
+        self.version = 1.0
+        if 'creator'     in root.attrib: self.creator = root.attrib['creator']
+        if 'description' in root.attrib: self.description = root.attrib['description']
+        if 'style'       in root.attrib: self.style = root.attrib['style']
+        if 'version'     in root.attrib:
+            try: self.version = float(root.attrib['style'])
+            except ValueError: pass
+
+        return True
+
+    def loadColorsXml(self, file):
+        """
+        Loads a colors.xml file
+        """
+        try: tree = etree.parse(file)
+        except Exception: return
+
+        root = tree.getroot()
+        if root.tag.lower() != 'colors': return False
+
+        colorDict = {}
+        for colorNode in root:
+            if colorNode.tag.lower() != 'color': continue
+            if not all(thing in colorNode.attrib for thing in ['id', 'value']): continue
+
+            colorval = colorNode.attrib['value']
+            if colorval.startswith('#'): colorval = colorval[1:]
+            a = 255
+            try:
+                if len(colorval) == 3:
+                    # RGB
+                    r = int(colorval[0], 16)
+                    g = int(colorval[1], 16)
+                    b = int(colorval[2], 16)
+                elif len(colorval) == 4:
+                    # RGBA
+                    r = int(colorval[0], 16)
+                    g = int(colorval[1], 16)
+                    b = int(colorval[2], 16)
+                    a = int(colorval[3], 16)
+                elif len(colorval) == 6:
+                    # RRGGBB
+                    r = int(colorval[0:2], 16)
+                    g = int(colorval[2:4], 16)
+                    b = int(colorval[4:6], 16)
+                elif len(colorval) == 8:
+                    # RRGGBBAA
+                    r = int(colorval[0:2], 16)
+                    g = int(colorval[2:4], 16)
+                    b = int(colorval[4:6], 16)
+                    a = int(colorval[6:8], 16)
+            except ValueError: continue
+            colorobj = QtGui.QColor(r, g, b, a)
+            colorDict[colorNode.attrib['id']] = colorobj
+
+        # Merge dictionaries
+        self.colors.update(colorDict)
+
+
+    def loadStylesheet(self, file):
+        """
+        Loads a stylesheet
+        """
+        print(file)
+
+    def color(self, name):
+        """
+        Returns a color
+        """
+        return self.colors[name]
+
+    def GetIcon(self, name, big=False):
+        """
+        Returns an icon
+        """
+
+        cache = self.iconCacheLg if big else self.iconCacheSm
+
+        if name not in cache:
+            path = 'reggiedata/ico/lg/icon-' if big else 'reggiedata/ico/sm/icon-'
+            path += name
+            cache[name] = QtGui.QIcon(path)
+
+        return cache[name]
+
+    def ui(self):
+        """
+        Returns the UI style
+        """
+        return self.uiStyle
+
+def toQColor(*args):
+    """
+    Usage: toQColor(r, g, b[, a]) OR toQColor((r, g, b[, a]))
+    """
+    if len(args) == 1: args = args[0]
+    r = args[0]
+    g = args[1]
+    b = args[2]
+    a = args[3] if len(args) == 4 else 255
+    return QtGui.QColor(r, g, b, a)
+
+def SetAppStyle():
+    """
+    Set the application window color
+    """
+    global app
+    global theme
+
+    # Change the color if applicable
+    #if theme.color('ui') is not None: app.setPalette(QtGui.QPalette(theme.color('ui')))
+
+    # Change the style
+    styleKey = setting('uiStyle')
+    style = QtWidgets.QStyleFactory.create(styleKey)
+    app.setStyle(style)
+
+def createHorzLine():
+    f = QtWidgets.QFrame()
+    f.setFrameStyle(QtWidgets.QFrame.HLine | QtWidgets.QFrame.Sunken)
+    return f
+
+def createVertLine():
+    f = QtWidgets.QFrame()
+    f.setFrameStyle(QtWidgets.QFrame.VLine | QtWidgets.QFrame.Sunken)
+    return f
+
+def LoadNumberFont():
+    """
+    Creates a valid font we can use to display the item numbers
+    """
+    global NumberFont
+    if NumberFont is not None: return
+
+    # this is a really crappy method, but I can't think of any other way
+    # normal Qt defines Q_WS_WIN and Q_WS_MAC but we don't have that here
+    s = QtCore.QSysInfo()
+    if hasattr(s, 'WindowsVersion'):
+        NumberFont = QtGui.QFont('Tahoma', (7/24) * TileWidth)
+    elif hasattr(s, 'MacintoshVersion'):
+        NumberFont = QtGui.QFont('Lucida Grande', (9/24) * TileWidth)
+    else:
+        NumberFont = QtGui.QFont('Sans', (8/24) * TileWidth)
+
 def GetUseRibbon():
     """
     This tells us if we're using the Ribbon
@@ -274,8 +728,6 @@ def GetUseRibbon():
     if str(setting('Menu')) == 'Ribbon': UseRibbon = True
     else: UseRibbon = False
 
-defaultStyle = None
-defaultPalette = None
 def GetDefaultStyle():
     """
     Stores a copy of the default app style upon launch, which can then be accessed later
@@ -285,33 +737,16 @@ def GetDefaultStyle():
     defaultStyle = app.style()
     defaultPalette = QtGui.QPalette(app.palette())
 
-def setting(name, default=None):
+def GetIcon(name, big=False):
     """
-    Thin wrapper around QSettings, fixes the type=bool bug
+    Helper function to grab a specific icon
     """
-    result = settings.value(name, default)
-    if result == 'false': return False
-    elif result == 'true': return True
-    elif result == 'none': return None
-    else: return result
+    return theme.GetIcon(name, big)
 
-def setSetting(name, value):
-    """
-    Thin wrapper around QSettings
-    """
-    return settings.setValue(name, value)
+#####################################################################
+########################### VERIFICATIONS ###########################
+#####################################################################
 
-def module_path():
-    """
-    This will get us the program's directory, even if we are frozen using cx_Freeze
-    """
-    if hasattr(sys, 'frozen'):
-        return os.path.dirname(sys.executable)
-    if __name__ == '__main__':
-        return os.path.dirname(os.path.abspath(sys.argv[0]))
-    return None
-
-compressed = False
 def checkContent(data):
     if not data.startswith(b'SARC'):
         return False
@@ -346,6 +781,47 @@ def IsNSMBLevel(filename):
             compressed = False
             return True
 
+def SetDirty(noautosave=False):
+    global Dirty, DirtyOverride, AutoSaveDirty
+    if DirtyOverride > 0: return
+
+    if not noautosave: AutoSaveDirty = True
+    if Dirty: return
+
+    Dirty = True
+    try:
+        mainWindow.UpdateTitle()
+    except Exception:
+        pass
+
+def MapPositionToZoneID(zones, x, y, useid=False):
+    """
+    Returns the zone ID containing or nearest the specified position
+    """
+    id = 0
+    minimumdist = -1
+    rval = -1
+
+    for zone in zones:
+        r = zone.ZoneRect
+        if   r.contains(x,y) and     useid: return zone.id
+        elif r.contains(x,y) and not useid: return id
+
+        xdist = 0
+        ydist = 0
+        if x <= r.left(): xdist = r.left() - x
+        if x >= r.right(): xdist = x - r.right()
+        if y <= r.top(): ydist = r.top() - y
+        if y >= r.bottom(): ydist = y - r.bottom()
+
+        dist = (xdist ** 2 + ydist ** 2) ** 0.5
+        if dist < minimumdist or minimumdist == -1:
+            minimumdist = dist
+            rval = zone.id
+
+        id += 1
+
+    return rval
 
 def FilesAreMissing():
     """
@@ -371,27 +847,6 @@ def FilesAreMissing():
 
     return False
 
-
-def GetIcon(name, big=False):
-    """
-    Helper function to grab a specific icon
-    """
-    return theme.GetIcon(name, big)
-
-
-def SetGamePath(newpath):
-    """
-    Sets the NSMBWii game path
-    """
-    global gamedef
-
-    # you know what's fun?
-    # isValidGamePath crashes in os.path.join if QString is used..
-    # so we must change it to a Python string manually
-    gamedef.SetGamePath(str(newpath))
-
-
-
 def isValidGamePath(check='ug'):
     """
     Checks to see if the path for NSMBU contains a valid game
@@ -405,9 +860,26 @@ def isValidGamePath(check='ug'):
 
     return True
 
+#####################################################################
+############################## LOADING ##############################
+#####################################################################
 
+def LoadTheme():
+    """
+    Loads the theme
+    """
+    global theme
 
-LevelNames = None
+    id = setting('Theme')
+    if id is None: id = 'Classic'
+    if id != 'Classic':
+
+        path = str('reggiedata\\themes\\'+id).replace('\\', '/')
+        with open(path, 'rb') as f:
+            theme = ReggieTheme(f)
+
+    else: theme = ReggieTheme()
+
 def LoadLevelNames():
     """
     Ensures that the level name info is loaded
@@ -433,8 +905,6 @@ def LoadLevelNames_Category(node):
             cat.append((str(child.attrib['name']), str(child.attrib['file'])))
     return tuple(cat)
 
-
-TilesetNames = None
 def LoadTilesetNames(reload_=False):
     """
     Ensures that the tileset name info is loaded
@@ -494,71 +964,6 @@ def LoadTilesetNames_Category(node):
             cat.append((str(child.attrib['filename']), str(child.attrib['name'])))
     return list(cat)
 
-def CascadeTilesetNames_Category(lower, upper):
-    """
-    Applies upper as a patch of lower
-    """
-    lower = list(lower)
-    for item in upper:
-
-        if isinstance(item[1], tuple) or isinstance(item[1], list):
-            # It's a category
-
-            found = False
-            for i, lowitem in enumerate(lower):
-                lowitem = lower[i]
-                if lowitem[0] == item[0]: # names are ==
-                    lower[i] = list(lower[i])
-                    lower[i][1] = CascadeTilesetNames_Category(lowitem[1], item[1])
-                    found = True
-                    break
-
-            if not found:
-                i = 0
-                while (i < len(lower)) and (isinstance(lower[i][1], tuple) or isinstance(lower[i][1], list)): i += 1
-                lower.insert(i+1, item)
-
-        else: # It's a tileset entry
-            found = False
-            for i, lowitem in enumerate(lower):
-                lowitem = lower[i]
-                if lowitem[0] == item[0]: # filenames are ==
-                    lower[i] = list(lower[i])
-                    lower[i][1] = item[1]
-                    found = True
-                    break
-
-            if not found: lower.append(item)
-    return lower
-
-def SortTilesetNames_Category(cat):
-    """
-    Sorts a tileset names category
-    """
-    cat = list(cat)
-
-    # First, remove all category nodes
-    cats = []
-    for node in cat:
-        if isinstance(node[1], tuple) or isinstance(node[1], list):
-            cats.append(node)
-    for node in cats: cat.remove(node)
-
-    # Sort the tileset names
-    cat.sort(key=lambda entry: entry[1])
-
-    # Sort the data within each category
-    for i, cat_ in enumerate(cats):
-        cats[i] = list(cat_)
-        if not cats[i][2]: cats[i][1] = SortTilesetNames_Category(cats[i][1])
-
-    # Put them back together
-    new = []
-    for category in cats: new.append(tuple(category))
-    for tileset in cat: new.append(tuple(tileset))
-    return tuple(new)
-
-ObjDesc = None
 def LoadObjDescriptions(reload_=False):
     """
     Ensures that the object description is loaded
@@ -607,6 +1012,985 @@ def LoadConstantLists():
     Sprites = None
     SpriteListData = None
 
+def LoadSpriteData():
+    """
+    Ensures that the sprite data info is loaded
+    """
+    global Sprites
+
+    Sprites = [None] * 724
+    errors = []
+    errortext = []
+
+    # It works this way so that it can overwrite settings based on order of precedence
+    paths = []
+    paths.append((trans.files['spritedata'], None))
+    for pathtuple in gamedef.multipleRecursiveFiles('spritedata', 'spritenames'): paths.append(pathtuple)
+
+
+    for sdpath, snpath in paths:
+
+        # Add XML sprite data, if there is any
+        if sdpath not in (None, ''):
+            path = sdpath if isinstance(sdpath, str) else sdpath.path
+            tree = etree.parse(path)
+            root = tree.getroot()
+
+            for sprite in root:
+                if sprite.tag.lower() != 'sprite': continue
+
+                try: spriteid = int(sprite.attrib['id'])
+                except ValueError: continue
+                spritename = sprite.attrib['name']
+                notes = None
+                relatedObjFiles = None
+
+                if 'notes' in sprite.attrib:
+                    notes = trans.string('SpriteDataEditor', 2, '[notes]', sprite.attrib['notes'])
+
+                if 'files' in sprite.attrib:
+                    relatedObjFiles = trans.string('SpriteDataEditor', 8, '[list]', sprite.attrib['files'].replace(';', '<br>'))
+
+                sdef = SpriteDefinition()
+                sdef.id = spriteid
+                sdef.name = spritename
+                sdef.notes = notes
+                sdef.relatedObjFiles = relatedObjFiles
+
+                try:
+                    sdef.loadFrom(sprite)
+                except Exception as e:
+                    errors.append(str(spriteid))
+                    errortext.append(str(e))
+
+                Sprites[spriteid] = sdef
+
+        # Add TXT sprite names, if there are any
+        # This code is only ever run when a custom
+        # gamedef is loaded, because spritenames.txt
+        # is a file only ever used by custom gamedefs.
+        if (snpath is not None) and (snpath.path is not None):
+            snfile = open(snpath.path)
+            data = snfile.read()
+            snfile.close()
+            del snfile
+
+            # Split the data
+            data = data.split('\n')
+            for i, line in enumerate(data): data[i] = line.split(':')
+
+            # Apply it
+            for spriteid, name in data:
+                Sprites[int(spriteid)].name = name
+
+    # Warn the user if errors occurred
+    if len(errors) > 0:
+        QtWidgets.QMessageBox.warning(None, trans.string('Err_BrokenSpriteData', 0), trans.string('Err_BrokenSpriteData', 1, '[sprites]', ', '.join(errors)), QtWidgets.QMessageBox.Ok)
+        QtWidgets.QMessageBox.warning(None, trans.string('Err_BrokenSpriteData', 2), repr(errortext))
+
+def LoadSpriteCategories(reload_=False):
+    """
+    Ensures that the sprite category info is loaded
+    """
+    global Sprites, SpriteCategories
+    if (SpriteCategories is not None) and not reload_: return
+
+    paths, isPatch = gamedef.recursiveFiles('spritecategories', True)
+    if isPatch:
+        new = []
+        new.append(trans.files['spritecategories'])
+        for path in paths: new.append(path)
+        paths = new
+
+    SpriteCategories = []
+    for path in paths:
+        tree = etree.parse(path)
+        root = tree.getroot()
+
+        CurrentView = None
+        for view in root:
+            if view.tag.lower() != 'view': continue
+
+            viewname = view.attrib['name']
+
+            # See if it's in there already
+            CurrentView = []
+            for potentialview in SpriteCategories:
+                if potentialview[0] == viewname: CurrentView = potentialview[1]
+            if CurrentView == []: SpriteCategories.append((viewname, CurrentView, []))
+
+            CurrentCategory = None
+            for category in view:
+                if category.tag.lower() != 'category': continue
+
+                catname = category.attrib['name']
+
+                # See if it's in there already
+                CurrentCategory = []
+                for potentialcat in CurrentView:
+                    if potentialcat[0] == catname: CurrentCategory = potentialcat[1]
+                if CurrentCategory == []: CurrentView.append((catname, CurrentCategory))
+
+                for attach in category:
+                    if attach.tag.lower() != 'attach': continue
+
+                    sprite = attach.attrib['sprite']
+                    if '-' not in sprite:
+                        if int(sprite) not in CurrentCategory:
+                            CurrentCategory.append(int(sprite))
+                    else:
+                        x = sprite.split('-')
+                        for i in range(int(x[0]), int(x[1])+1):
+                            if i not in CurrentCategory:
+                                CurrentCategory.append(i)
+
+    # Add a Search category
+    SpriteCategories.append((trans.string('Sprites', 19), [(trans.string('Sprites', 16), list(range(0, 724)))], []))
+    SpriteCategories[-1][1][0][1].append(9999) # 'no results' special case
+
+def LoadSpriteListData(reload_=False):
+    """
+    Ensures that the sprite list modifier data is loaded
+    """
+    global SpriteListData
+    if (SpriteListData is not None) and not reload_: return
+
+    paths = gamedef.recursiveFiles('spritelistdata')
+    new = []
+    new.append('reggiedata/spritelistdata.txt')
+    for path in paths: new.append(path)
+    paths = new
+
+    SpriteListData = []
+    for i in range(24): SpriteListData.append([])
+    for path in paths:
+        f = open(path)
+        data = f.read()
+        f.close()
+
+        split = data.replace('\n', '').split(';')
+        for lineidx in range(24):
+            line = split[lineidx]
+            splitline = line.split(',')
+            splitlinelist = []
+
+            # Add them
+            for item in splitline:
+                try: newitem = int(item)
+                except ValueError: continue
+                if newitem in SpriteListData[lineidx]: continue
+                SpriteListData[lineidx].append(newitem)
+            SpriteListData[lineidx].sort()
+
+def LoadEntranceNames(reload_=False):
+    """
+    Ensures that the entrance names are loaded
+    """
+    global EntranceTypeNames
+    if (EntranceTypeNames is not None) and not reload_: return
+
+    paths, isPatch = gamedef.recursiveFiles('entrancetypes', True)
+    if isPatch:
+        new = []
+        new.append(trans.files['entrancetypes'])
+        for path in paths: new.append(path)
+        paths = new
+
+    NameList = {}
+    for path in paths:
+        getit = open(path, 'r')
+        newNames = {}
+        for line in getit.readlines(): newNames[int(line.split(':')[0])] = line.split(':')[1].replace('\n', '')
+        for idx in newNames: NameList[idx] = newNames[idx]
+
+    EntranceTypeNames = []
+    idx = 0
+    while idx in NameList:
+        EntranceTypeNames.append(trans.string('EntranceDataEditor', 28, '[id]', idx, '[name]', NameList[idx]))
+        idx += 1
+
+def LoadTileset(idx, name, reload=False):
+    try:
+        return _LoadTileset(idx, name, reload)
+    except Exception:
+        raise
+        QtWidgets.QMessageBox.warning(None, trans.string('Err_CorruptedTileset', 0), trans.string('Err_CorruptedTileset', 1, '[file]', name))
+        return False
+
+def LoadOverrides():
+    """
+    Load overrides
+    """
+    global Overrides
+
+    OverrideBitmap = QtGui.QPixmap('reggiedata/overrides.png')
+    Overrides = [None]*256
+    idx = 0
+    xcount = OverrideBitmap.width() // TileWidth
+    ycount = OverrideBitmap.height() // TileWidth
+    sourcex = 0
+    sourcey = 0
+
+    for y in range(ycount):
+        for x in range(xcount):
+            bmp = OverrideBitmap.copy(sourcex, sourcey, TileWidth, TileWidth)
+            Overrides[idx] = TilesetTile(bmp)
+
+            # Set collisions if it's a brick or question
+            #if y <= 4:
+            #    if 8 < x < 20: Overrides[idx].setQuestionCollisions()
+            #    elif 20 <= x < 32: Overrides[idx].setBrickCollisions()
+
+            idx += 1
+            sourcex += TileWidth
+        sourcex = 0
+        sourcey += TileWidth
+        if idx % 16 != 0:
+            idx -= (idx % 16)
+            idx += 16
+
+def LoadTranslation():
+    """
+    Loads the translation
+    """
+    global trans
+
+    name = setting('Translation')
+    eng = (None, 'None', 'English', '', 0)
+    if name in eng: trans = ReggieTranslation(None)
+    else: trans = ReggieTranslation(name)
+
+    if generateStringsXML: trans.generateXML()
+
+def LoadGameDef(name=None, dlg=None):
+    """
+    Loads a game definition
+    """
+    global gamedef
+    if dlg: dlg.setMaximum(7)
+
+    # Put the whole thing into a try-except clause
+    # to catch whatever errors may happen
+    try:
+
+        # Load the gamedef
+        if dlg: dlg.setLabelText(trans.string('Gamedefs', 1)) # Loading game patch...
+        gamedef = ReggieGameDefinition(name)
+        if gamedef.custom and (not settings.contains('GamePath_' + gamedef.name)):
+            # First-time usage of this gamedef. Have the
+            # user pick a stage folder so we can load stages
+            # and tilesets from there
+            QtWidgets.QMessageBox.information(None, trans.string('Gamedefs', 2), trans.string('Gamedefs', 3, '[game]', gamedef.name), QtWidgets.QMessageBox.Ok)
+            result = mainWindow.HandleChangeGamePath(True)
+            if result is not True: QtWidgets.QMessageBox.information(None, trans.string('Gamedefs', 4), trans.string('Gamedefs', 5, '[game]', gamedef.name), QtWidgets.QMessageBox.Ok)
+            else: QtWidgets.QMessageBox.information(None, trans.string('Gamedefs', 6), trans.string('Gamedefs', 7, '[game]', gamedef.name), QtWidgets.QMessageBox.Ok)
+        if dlg: dlg.setValue(1)
+
+        # Load spritedata.xml and spritecategories.xml
+        if dlg: dlg.setLabelText(trans.string('Gamedefs', 8)) # Loading sprite data...
+        LoadSpriteData()
+        LoadSpriteListData(True)
+        LoadSpriteCategories(True)
+        if mainWindow:
+            mainWindow.spriteViewPicker.clear()
+            for cat in SpriteCategories:
+                mainWindow.spriteViewPicker.addItem(cat[0])
+            mainWindow.sprPicker.LoadItems() # Reloads the sprite picker list items
+            mainWindow.spriteViewPicker.setCurrentIndex(0) # Sets the sprite picker to category 0 (enemies)
+            mainWindow.spriteDataEditor.setSprite(mainWindow.spriteDataEditor.spritetype, True) # Reloads the sprite data editor fields
+            mainWindow.spriteDataEditor.update()
+        if dlg: dlg.setValue(2)
+
+        # Reload tilesets
+        if dlg: dlg.setLabelText(trans.string('Gamedefs', 10)) # Reloading tilesets...
+        LoadObjDescriptions(True) # reloads ts1_descriptions
+        if mainWindow is not None: mainWindow.ReloadTilesets(True)
+        LoadTilesetNames(True) # reloads tileset names
+        if dlg: dlg.setValue(4)
+
+        # Load sprites.py
+        if dlg: dlg.setLabelText(trans.string('Gamedefs', 11)) # Loading sprite image data...
+        if Area is not None:
+            SLib.SpritesFolders = gamedef.recursiveFiles('sprites', False, True)
+
+            SLib.ImageCache.clear()
+            SLib.SpriteImagesLoaded.clear()
+            SLib.LoadBasicSuite()
+
+            spriteClasses = gamedef.getImageClasses()
+
+            for s in Area.sprites:
+                if s.type in SLib.SpriteImagesLoaded: continue
+                if s.type not in spriteClasses: continue
+
+                spriteClasses[s.type].loadImages()
+
+                SLib.SpriteImagesLoaded.add(s.type)
+
+            for s in Area.sprites:
+                if s.type in spriteClasses:
+                    s.setImageObj(spriteClasses[s.type])
+                else:
+                    s.setImageObj(SLib.SpriteImage)
+
+        if dlg: dlg.setValue(5)
+
+        # Reload the sprite-picker text
+        if dlg: dlg.setLabelText(trans.string('Gamedefs', 12)) # Applying sprite image data...
+        if Area is not None:
+            for spr in Area.sprites:
+                spr.UpdateListItem() # Reloads the sprite-picker text
+        if dlg: dlg.setValue(6)
+
+        # Load entrance names
+        if dlg: dlg.setLabelText(trans.string('Gamedefs', 16)) # Loading entrance names...
+        LoadEntranceNames(True)
+        if dlg: dlg.setValue(7)
+
+    except Exception as e: raise
+    #    # Something went wrong.
+    #    if dlg: dlg.setValue(7) # autocloses it
+    #    QtWidgets.QMessageBox.information(None, trans.string('Gamedefs', 17), trans.string('Gamedefs', 18, '[error]', str(e)))
+    #    if name is not None: LoadGameDef(None)
+    #    return False
+
+
+    # Success!
+    if dlg: setSetting('LastGameDef', name)
+    return True
+
+def LoadActionsLists():
+    # Define the menu items, their default settings and their mainWindow.actions keys
+    # These are used both in the Preferences Dialog and when init'ing the toolbar.
+    global FileActions
+    global EditActions
+    global ViewActions
+    global SettingsActions
+    global HelpActions
+
+    FileActions = (
+        (trans.string('MenuItems', 0),  True,  'newlevel'),
+        (trans.string('MenuItems', 2),  True,  'openfromname'),
+        (trans.string('MenuItems', 4),  False, 'openfromfile'),
+        (trans.string('MenuItems', 6),  False, 'openrecent'),
+        (trans.string('MenuItems', 8),  True,  'save'),
+        (trans.string('MenuItems', 10), False, 'saveas'),
+        (trans.string('MenuItems', 12), False, 'metainfo'),
+        (trans.string('MenuItems', 14), True,  'screenshot'),
+        (trans.string('MenuItems', 16), False, 'changegamepath'),
+        (trans.string('MenuItems', 18), False, 'preferences'),
+        (trans.string('MenuItems', 20), False, 'exit'),
+        )
+    EditActions = (
+        (trans.string('MenuItems', 22), False, 'selectall'),
+        (trans.string('MenuItems', 24), False, 'deselect'),
+        (trans.string('MenuItems', 26), True,  'cut'),
+        (trans.string('MenuItems', 28), True,  'copy'),
+        (trans.string('MenuItems', 30), True,  'paste'),
+        (trans.string('MenuItems', 32), False, 'shiftitems'),
+        (trans.string('MenuItems', 34), False, 'mergelocations'),
+        (trans.string('MenuItems', 38), False, 'freezeobjects'),
+        (trans.string('MenuItems', 40), False, 'freezesprites'),
+        (trans.string('MenuItems', 42), False, 'freezeentrances'),
+        (trans.string('MenuItems', 44), False, 'freezelocations'),
+        (trans.string('MenuItems', 46), False, 'freezepaths'),
+        )
+    ViewActions = (
+        (trans.string('MenuItems', 48), True,  'showlay0'),
+        (trans.string('MenuItems', 50), True,  'showlay1'),
+        (trans.string('MenuItems', 52), True,  'showlay2'),
+        (trans.string('MenuItems', 54), True,  'showsprites'),
+        (trans.string('MenuItems', 56), False, 'showspriteimages'),
+        (trans.string('MenuItems', 58), True,  'showlocations'),
+        (trans.string('MenuItems', 60), True,  'grid'),
+        (trans.string('MenuItems', 62), True,  'zoommax'),
+        (trans.string('MenuItems', 64), True,  'zoomin'),
+        (trans.string('MenuItems', 66), True,  'zoomactual'),
+        (trans.string('MenuItems', 68), True,  'zoomout'),
+        (trans.string('MenuItems', 70), True,  'zoommin'),
+        )
+    SettingsActions = (
+        (trans.string('MenuItems', 72), True, 'areaoptions'),
+        (trans.string('MenuItems', 74), True, 'zones'),
+        (trans.string('MenuItems', 76), True, 'backgrounds'),
+        (trans.string('MenuItems', 78), False, 'addarea'),
+        (trans.string('MenuItems', 80), False, 'importarea'),
+        (trans.string('MenuItems', 82), False, 'deletearea'),
+        (trans.string('MenuItems', 84), False, 'reloadgfx'),
+        )
+    HelpActions = (
+        (trans.string('MenuItems', 86), False, 'infobox'),
+        (trans.string('MenuItems', 88), False, 'helpbox'),
+        (trans.string('MenuItems', 90), False, 'tipbox'),
+        (trans.string('MenuItems', 92), False, 'aboutqt'),
+        )
+
+#############
+# UNSORTED
+#############
+
+class LevelScene(QtWidgets.QGraphicsScene):
+    """
+    GraphicsScene subclass for the level scene
+    """
+    def __init__(self, *args):
+        global theme
+
+        self.bgbrush = QtGui.QBrush(theme.color('bg'))
+        QtWidgets.QGraphicsScene.__init__(self, *args)
+
+    def drawBackground(self, painter, rect):
+        """
+        Draws all visible tiles
+        """
+        painter.fillRect(rect, self.bgbrush)
+        if not hasattr(Area, 'layers'): return
+
+        drawrect = QtCore.QRectF(rect.x() / TileWidth, rect.y() / TileWidth, rect.width() / TileWidth + 1, rect.height() / TileWidth + 1)
+        isect = drawrect.intersects
+
+        layer0 = []; l0add = layer0.append
+        layer1 = []; l1add = layer1.append
+        layer2 = []; l2add = layer2.append
+
+        type_obj = ObjectItem
+        ii = isinstance
+
+        x1 = 1024
+        y1 = 512
+        x2 = 0
+        y2 = 0
+
+        # iterate through each object
+        funcs = [layer0.append, layer1.append, layer2.append]
+        show = [Layer0Shown, Layer1Shown, Layer2Shown]
+        for layer, add, process in zip(Area.layers, funcs, show):
+            if not process: continue
+            for item in layer:
+                if not isect(item.LevelRect): continue
+                add(item)
+                xs = item.objx
+                xe = xs+item.width
+                ys = item.objy
+                ye = ys+item.height
+                if xs < x1: x1 = xs
+                if xe > x2: x2 = xe
+                if ys < y1: y1 = ys
+                if ye > y2: y2 = ye
+
+        width = x2 - x1
+        height = y2 - y1
+        tiles = Tiles
+
+        # create and draw the tilemaps
+        for layer in [layer2, layer1, layer0]:
+            if len(layer) > 0:
+                tmap = []
+                i = 0
+                while i < height:
+                    tmap.append([None] * width)
+                    i += 1
+
+                for item in layer:
+                    startx = item.objx - x1
+                    desty = item.objy - y1
+
+                    exists = True
+                    if ObjectDefinitions[item.tileset] is None:
+                        exists = False
+                    elif ObjectDefinitions[item.tileset][item.type] is None:
+                        exists = False
+
+                    for row in item.objdata:
+                        destrow = tmap[desty]
+                        destx = startx
+                        for tile in row:
+                            if not exists:
+                                destrow[destx] = -1
+                            elif tile > 0:
+                                destrow[destx] = tile
+                            destx += 1
+                        desty += 1
+
+                painter.save()
+                painter.translate(x1 * TileWidth, y1 * TileWidth)
+                drawPixmap = painter.drawPixmap
+                desty = 0
+                for row in tmap:
+                    destx = 0
+                    for tile in row:
+                        pix = None
+
+                        if tile == -1:
+                            # Draw unknown tiles
+                            pix = None#Overrides[108].getCurrentTile()
+                        elif tile is not None:
+                            pix = tiles[tile].getCurrentTile()
+
+                        if pix is not None:
+                            painter.drawPixmap(destx, desty, pix)
+
+                        destx += TileWidth
+                    desty += TileWidth
+                painter.restore()
+
+class HexSpinBox(QtWidgets.QSpinBox):
+    class HexValidator(QtGui.QValidator):
+        def __init__(self, min, max):
+            QtGui.QValidator.__init__(self)
+            self.valid = set('0123456789abcdef')
+            self.min = min
+            self.max = max
+
+        def validate(self, input, pos):
+            try:
+                input = str(input).lower()
+            except Exception:
+                return (self.Invalid, input, pos)
+            valid = self.valid
+
+            for char in input:
+                if char not in valid:
+                    return (self.Invalid, input, pos)
+
+            try:
+                value = int(input, 16)
+            except ValueError:
+                # If value == '' it raises ValueError
+                return (self.Invalid, input, pos)
+
+            if value < self.min or value > self.max:
+                return (self.Intermediate, input, pos)
+
+            return (self.Acceptable, input, pos)
+
+
+    def __init__(self, format='%04X', *args):
+        self.format = format
+        QtWidgets.QSpinBox.__init__(self, *args)
+        self.validator = self.HexValidator(self.minimum(), self.maximum())
+
+    def setMinimum(self, value):
+        self.validator.min = value
+        QtWidgets.QSpinBox.setMinimum(self, value)
+
+    def setMaximum(self, value):
+        self.validator.max = value
+        QtWidgets.QSpinBox.setMaximum(self, value)
+
+    def setRange(self, min, max):
+        self.validator.min = min
+        self.validator.max = max
+        QtWidgets.QSpinBox.setMinimum(self, min)
+        QtWidgets.QSpinBox.setMaximum(self, max)
+
+    def validate(self, text, pos):
+        return self.validator.validate(text, pos)
+
+    def textFromValue(self, value):
+        return self.format % value
+
+    def valueFromText(self, value):
+        return int(str(value), 16)
+
+class ReggieRibbon(QRibbon):
+    """
+    Class that represents Reggie's ribbon
+    """
+    def __init__(self):
+        """
+        Creates and initializes the Reggie Ribbon
+        """
+        QRibbon.__init__(self)
+
+        # Set up the file menu
+        self.fileMenu = ReggieRibbonFileMenu()
+        self.setFileMenu(self.fileMenu)
+        self.setFileTitle(trans.string('Ribbon', 23))
+
+        # Add tabs
+        self.btns = {}
+        self.addHomeTab()
+        self.addActionsTab()
+        self.addViewTab()
+
+        # Add the Help Menu
+        m = mainWindow.SetupHelpMenu()
+        self.setHelpMenu(m)
+        self.setHelpIcon(GetIcon('help'))
+
+        # Stylize on Windows
+        self.stylizeOnWindows(mainWindow)
+
+        global theme
+
+
+    def addHomeTab(self):
+        """
+        Adds the Home Tab
+        """
+        tab = self.addTab(trans.string('Ribbon', 0)) # "Home"
+        self.homeTab = tab
+
+        gi, ts, mw, qk = GetIcon, trans.string, mainWindow, QtGui.QKeySequence
+
+        # Clipboard Section
+        cSection = tab.addSection(ts('Ribbon', 5)) # "Clipboard"
+        a = cSection.addFullButton(gi('paste', True), ts('MenuItems', 30), mw.Paste, qk.Paste, ts('MenuItems', 31))
+        b = cSection.addSmallButton(gi('cut'),   ts('MenuItems', 26), mw.Cut,   qk.Cut,   ts('MenuItems', 27))
+        c = cSection.addSmallButton(gi('copy'),  ts('MenuItems', 28), mw.Copy,  qk.Copy,  ts('MenuItems', 29))
+        self.btns['paste'], self.btns['cut'], self.btns['copy'] = a, b, c
+        self.btns['cut'].setEnabled(False)
+        self.btns['copy'].setEnabled(False)
+
+        # Freeze Section
+        fSection = tab.addSection(ts('Ribbon', 6)) # "Freeze"
+        a = fSection.addSmallToggleButton(gi('objectsfreeze'),   None, mw.HandleObjectsFreeze,   'Ctrl+Shift+1', ts('MenuItems', 39))
+        b = fSection.addSmallToggleButton(gi('spritesfreeze'),   None, mw.HandleSpritesFreeze,   'Ctrl+Shift+2', ts('MenuItems', 41))
+        c = fSection.addSmallToggleButton(gi('entrancesfreeze'), None, mw.HandleEntrancesFreeze, 'Ctrl+Shift+3', ts('MenuItems', 43))
+        d = fSection.addSmallToggleButton(gi('locationsfreeze'), None, mw.HandleLocationsFreeze, 'Ctrl+Shift+4', ts('MenuItems', 45))
+        e = fSection.addSmallToggleButton(gi('pathsfreeze'),     None, mw.HandlePathsFreeze,     'Ctrl+Shift+5', ts('MenuItems', 47))
+        f = fSection.addSmallToggleButton(gi('commentsfreeze'),  None, mw.HandleCommentsFreeze,  'Ctrl+Shift+9', ts('MenuItems', 115))
+        self.btns['objfrz'], self.btns['sprfrz'], self.btns['entfrz'], self.btns['locfrz'], self.btns['pthfrz'], self.btns['comfrz'] = a, b, c, d, e, f
+
+        # Area Section
+        aSection = tab.addSection(ts('Ribbon', 8)) # "Area"
+        #a = aSection.addCustomWidget(self.AreaMenuButton())
+        b = aSection.addFullButton(gi('area', True), ts('MenuItems', 72), mw.HandleAreaOptions, 'Ctrl+Alt+A', ts('MenuItems', 73))
+        #self.btns['areasel'], self.btns['areaset'] = a, b
+            ##        LGroup.addButton(mainWindow.HandleAreaOptions, 'Ctrl+Alt+A', trans.string('MenuItems', 73), True, 'area', trans.string('MenuItems', 72))
+
+        # Set the toggle buttons to their default positions
+        self.btns['objfrz'].setChecked(ObjectsFrozen)
+        self.btns['sprfrz'].setChecked(SpritesFrozen)
+        self.btns['entfrz'].setChecked(EntrancesFrozen)
+        self.btns['locfrz'].setChecked(LocationsFrozen)
+        self.btns['pthfrz'].setChecked(PathsFrozen)
+        self.btns['comfrz'].setChecked(CommentsFrozen)
+
+        return
+
+
+    def addActionsTab(self):
+        """
+        Adds the Actions Tab
+        """
+        tab = self.addTab(trans.string('Ribbon', 1)) # "Actions"
+        self.actionsTab = tab
+
+        gi, ts, mw, qk = GetIcon, trans.string, mainWindow, QtGui.QKeySequence
+
+        return
+
+    def addViewTab(self):
+        """
+        Adds the View Tab
+        """
+        tab = self.addTab(trans.string('Ribbon', 2)) # "View"
+        self.viewTab = tab
+
+        gi, ts, mw, qk = GetIcon, trans.string, mainWindow, QtGui.QKeySequence
+
+        # Layers
+        LSection = tab.addSection(ts('Ribbon', 14)) # "Layers"
+        a = LSection.addFullToggleButton(gi('layer0', True), ts('MenuItems', 48), mw.HandleUpdateLayer0, 'Ctrl+1', ts('MenuItems', 49))
+        b = LSection.addFullToggleButton(gi('layer1', True), ts('MenuItems', 50), mw.HandleUpdateLayer1, 'Ctrl+2', ts('MenuItems', 51))
+        c = LSection.addFullToggleButton(gi('layer2', True), ts('MenuItems', 52), mw.HandleUpdateLayer2, 'Ctrl+3', ts('MenuItems', 53))
+        self.btns['lay0'], self.btns['lay1'], self.btns['lay2'] = a, b, c
+
+        # Tilesets
+        tSection = tab.addSection(ts('Ribbon', 13)) # "Tilesets"
+        a = tSection.addSmallToggleButton(gi('animation'),  ts('MenuItems', 108), mw.HandleTilesetAnimToggle, 'Ctrl+7', ts('MenuItems', 109))
+        b = tSection.addSmallToggleButton(gi('collisions'), ts('MenuItems', 110), mw.HandleCollisionsToggle,  'Ctrl+8', ts('MenuItems', 111))
+        self.btns['anim'], self.btns['colls'] = a, b
+
+        # Visibility
+        vSection = tab.addSection(ts('Ribbon', 15)) # "Visibility"
+        a = vSection.addSmallToggleButton(gi('sprites'),    ts('MenuItems', 54),  mw.HandleSpritesVisibility,   'Ctrl+4', ts('MenuItems', 55))
+        b = vSection.addSmallToggleButton(gi('sprites'),    ts('MenuItems', 56),  mw.HandleSpriteImages,        'Ctrl+6', ts('MenuItems', 57))
+        c = vSection.addSmallToggleButton(gi('locations'),  ts('MenuItems', 58),  mw.HandleLocationsVisibility, 'Ctrl+5', ts('MenuItems', 59))
+        d = vSection.addSmallToggleButton(gi('comments'),   ts('MenuItems', 116), mw.HandleCommentsVisibility,  'Ctrl+0', ts('MenuItems', 117))
+        e = vSection.addSmallToggleButton(gi('realview'),   ts('MenuItems', 118), mw.HandleRealViewToggle,  'Ctrl+9', ts('MenuItems', 119))
+        f = vSection.addFullButton(       gi('grid', True), ts('MenuItems', 60),  mw.HandleSwitchGrid,          'Ctrl+G', ts('MenuItems', 61))
+        self.btns['showsprites'], self.btns['showspriteimgs'], self.btns['showlocs'], self.btns['showcoms'], self.btns['realview'], self.btns['grid'] = a, b, c, d, e, f
+
+        # Set the toggle buttons to their default start values
+        self.btns['lay0'].setChecked(Layer0Shown)
+        self.btns['lay1'].setChecked(Layer1Shown)
+        self.btns['lay2'].setChecked(Layer2Shown)
+        self.btns['showsprites'].setChecked(SpritesShown)
+        self.btns['showspriteimgs'].setChecked(SpriteImagesShown)
+        self.btns['showlocs'].setChecked(LocationsShown)
+        self.btns['showcoms'].setChecked(CommentsShown)
+        self.btns['realview'].setChecked(RealViewEnabled)
+
+        return
+
+    def addOverview(self, dock, act):
+        """
+        Adds the Show/Hide Overview action to the ribbon
+        """
+        return
+        self.oDock = dock
+        self.dockGroup = RibbonGroup(trans.string('Ribbon', 17))
+        self.overBtn = self.dockGroup.addButton(self.HandleOverviewClick, act.shortcut(), trans.string('MenuItems', 95), True, 'overview', trans.string('MenuItems', 94), True, True)
+
+    def addPalette(self, dock, act):
+        """
+        Adds the Show/Hide Palette action to the ribbon
+        """
+        return
+        self.pDock = dock
+        self.palBtn = self.dockGroup.addButton(self.HandlePaletteClick, act.shortcut(), trans.string('MenuItems', 97), True, 'palette', trans.string('MenuItems', 96), True, True)
+
+    def addIslandGen(self, dock, act):
+        """
+        Adds the Show/Hide Island Generator action to the ribbon
+        """
+        return
+        self.iDock = dock
+        self.genBtn = self.dockGroup.addButton(self.HandleIslandGenClick, act.shortcut(), trans.string('MenuItems', 101), True, 'islandgen', trans.string('MenuItems', 100), True, True)
+        self.viewTab.addGroup(self.dockGroup)
+        self.viewTab.finish()
+
+    @QtCore.pyqtSlot(bool)
+    def HandleOverviewClick(self, checked = None):
+        """
+        Updates the overview btn
+        """
+        return
+        visible = checked if checked is not None else not self.oDock.isVisible()
+        self.oDock.setVisible(visible)
+        if checked is None: self.overBtn.setChecked(visible)
+
+    @QtCore.pyqtSlot(bool)
+    def HandlePaletteClick(self, checked = None):
+        """
+        Updates the palette btn
+        """
+        return
+        visible = checked if checked is not None else not self.pDock.isVisible()
+        self.pDock.setVisible(visible)
+        if checked is None: self.palBtn.setChecked(visible)
+
+    @QtCore.pyqtSlot(bool)
+    def HandleIslandGenClick(self, checked = None):
+        """
+        Updates the island generator btn
+        """
+        return
+        visible = checked if checked is not None else not self.iDock.isVisible()
+        self.iDock.setVisible(visible)
+        if checked is None: self.genBtn.setChecked(visible)
+
+    def updateAreaComboBox(self, areas, area):
+        """
+        Updates the Area Combo Box
+        """
+        return
+        self.homeTab.areaComboBox.clear()
+        for i in range(1, len(Level.areas) + 1):
+            self.homeTab.areaComboBox.addItem(trans.string('AreaCombobox', 0, '[num]', i))
+        self.homeTab.areaComboBox.setCurrentIndex(area-1)
+
+    def setBtnEnabled(self, btn, enabled):
+        """
+        Enables or disables a button
+        """
+        try: self.btns[btn].setEnabled(enabled)
+        except Exception: print('Ribbon enabling error: ' + btn + ', ' + str(enabled))
+
+class ReggieRibbonFileMenu(QFileMenu):
+    """
+    Widget that represents the file menu for the ribbon
+    """
+    def __init__(self):
+        """
+        Creates and initializes the menu
+        """
+        QFileMenu.__init__(self)
+        self.setRecentFilesText('Recent levels')
+        self.btns = {}
+
+        # Add a recent files manager
+        self.recentFilesMgr = QRecentFilesManager(setting('RecentFiles'))
+        self.setRecentFilesManager(self.recentFilesMgr)
+        self.recentFileClicked.connect(self.handleRecentFileClicked)
+
+        # Get ready to add buttons
+        gi, ts, mw, qk = GetIcon, trans.string, mainWindow, QtGui.QKeySequence
+
+        # Create right-side panels
+        openPanel = QFileMenuPanel('Open an existing level')
+        a = openPanel.addButton(gi('open',         True), ts('MenuItems', 2),  mw.HandleOpenFromName, qk.Open,        ts('MenuItems', 3))
+        b = openPanel.addButton(gi('openfromfile', True), ts('MenuItems', 4),  mw.HandleOpenFromFile, 'Ctrl+Shift+O', ts('MenuItems', 5))
+        self.btns['openname2'], self.btns['openfile'] = a, b
+
+        # Add left-side buttons
+        a = self.addButton(                gi('new', True),    ts('MenuItems', 0),   mw.HandleNewLevel,     qk.New,             ts('MenuItems', 1))
+        b = self.addArrowButton(openPanel, gi('open', True),   ts('MenuItems', 112), mw.HandleOpenFromName, None,               ts('MenuItems', 3))
+        c = self.addButton(                gi('save', True),   ts('MenuItems', 8),   mw.HandleSave,         qk.Save,            ts('MenuItems', 9))
+        d = self.addButton(                gi('saveas', True), ts('MenuItems', 10),  mw.HandleSaveAs,       qk.SaveAs,          ts('MenuItems', 11))
+        self.btns['new'], self.btns['openname1'], self.btns['save'], self.btns['saveas'] = a, b, c, d
+        self.addSeparator()
+        a = self.addButton(gi('info', True),     trans.string('MenuItems', 12), mw.HandleInfo,        'Ctrl+Alt+I', trans.string('MenuItems', 13))
+        b = self.addButton(gi('settings', True), trans.string('MenuItems', 18), mw.HandlePreferences, 'Ctrl+Alt+P', trans.string('MenuItems', 19))
+        self.addSeparator()
+        c = self.addButton(gi('delete', True), trans.string('MenuItems', 20), mw.HandleExit, qk.Quit, trans.string('MenuItems', 21))
+        self.btns['lvlinfo'], self.btns['prefs'], self.btns['exit'] = a, b, c
+
+    def handleRecentFileClicked(self, path):
+        """
+        Handles recent files being clicked
+        """
+        mainWindow.LoadLevel(None, str(path), True, 1)
+
+class RecentFilesMenu(QtWidgets.QMenu):
+    """
+    A menu which displays recently opened files
+    """
+    def __init__(self):
+        """
+        Creates and initializes the menu
+        """
+        QtWidgets.QMenu.__init__(self)
+        self.setMinimumWidth(192)
+
+        # Here's how this works:
+        # - Upon startup, RecentFiles is obtained from QSettings and put into self.FileList
+        # - All modifications to the menu thereafter are then applied to self.FileList
+        # - The actions displayed in the menu are determined by whatever's in self.FileList
+        # - Whenever self.FileList is changed, self.writeSettings is called which writes
+        #      it all back to the QSettings
+
+        # Populate FileList upon startup
+        if settings.contains('RecentFiles'):
+            self.FileList = str(setting('RecentFiles')).split('|')
+        else:
+            self.FileList = ['']
+
+        # This fixes bugs
+        self.FileList = [path for path in self.FileList if path.lower() not in ('', 'none', 'false', 'true')]
+
+        self.updateActionList()
+
+
+    def writeSettings(self):
+        """
+        Writes FileList back to the Registry
+        """
+        setSetting('RecentFiles', str('|'.join(self.FileList)))
+
+    def updateActionList(self):
+        """
+        Updates the actions visible in the menu
+        """
+
+        self.clear() # removes any actions already in the menu
+        ico = GetIcon('new')
+        currentShortcut = 0
+
+        for i, filename in enumerate(self.FileList):
+            filename = filename.split('\\')[-1]
+            short = clipStr(filename, 72)
+            if short is not None: filename = short + '...'
+
+            act = QtWidgets.QAction(ico, filename, self)
+            if i <=9: act.setShortcut(QtGui.QKeySequence('Ctrl+Alt+'+str(i)))
+            act.setToolTip(str(self.FileList[i]))
+
+            # This is a TERRIBLE way to do this, but I can't think of anything simpler. :(
+            if i == 0:  handler = self.HandleOpenRecentFile0
+            if i == 1:  handler = self.HandleOpenRecentFile1
+            if i == 2:  handler = self.HandleOpenRecentFile2
+            if i == 3:  handler = self.HandleOpenRecentFile3
+            if i == 4:  handler = self.HandleOpenRecentFile4
+            if i == 5:  handler = self.HandleOpenRecentFile5
+            if i == 6:  handler = self.HandleOpenRecentFile6
+            if i == 7:  handler = self.HandleOpenRecentFile7
+            if i == 8:  handler = self.HandleOpenRecentFile8
+            if i == 9:  handler = self.HandleOpenRecentFile9
+            if i == 10: handler = self.HandleOpenRecentFile10
+            if i == 11: handler = self.HandleOpenRecentFile11
+            if i == 12: handler = self.HandleOpenRecentFile12
+            if i == 13: handler = self.HandleOpenRecentFile13
+            if i == 14: handler = self.HandleOpenRecentFile14
+            act.triggered.connect(handler)
+
+            self.addAction(act)
+
+    def AddToList(self, path):
+        """
+        Adds an entry to the list
+        """
+        MaxLength = 16
+
+        if path in ('None', 'True', 'False', None, True, False): return # fixes bugs
+        path = str(path).replace('/', '\\')
+
+        new = [path]
+        for filename in self.FileList:
+            if filename != path:
+                new.append(filename)
+        if len(new) > MaxLength: new = new[0:MaxLength]
+
+        self.FileList = new
+        self.writeSettings()
+        self.updateActionList()
+
+    def RemoveFromList(self, index):
+        """
+        Removes an entry from the list
+        """
+        del self.FileList[index]
+        self.writeSettings()
+        self.updateActionList()
+
+    def clearAll(self):
+        """
+        Clears all recent files from the list and the registry
+        """
+        self.FileList = []
+        self.writeSettings()
+        self.updateActionList()
+
+    def HandleOpenRecentFile0(self):
+        self.HandleOpenRecentFile(0)
+    def HandleOpenRecentFile1(self):
+        self.HandleOpenRecentFile(1)
+    def HandleOpenRecentFile2(self):
+        self.HandleOpenRecentFile(2)
+    def HandleOpenRecentFile3(self):
+        self.HandleOpenRecentFile(3)
+    def HandleOpenRecentFile4(self):
+        self.HandleOpenRecentFile(4)
+    def HandleOpenRecentFile5(self):
+        self.HandleOpenRecentFile(5)
+    def HandleOpenRecentFile6(self):
+        self.HandleOpenRecentFile(6)
+    def HandleOpenRecentFile7(self):
+        self.HandleOpenRecentFile(7)
+    def HandleOpenRecentFile8(self):
+        self.HandleOpenRecentFile(8)
+    def HandleOpenRecentFile9(self):
+        self.HandleOpenRecentFile(9)
+    def HandleOpenRecentFile10(self):
+        self.HandleOpenRecentFile(10)
+    def HandleOpenRecentFile11(self):
+        self.HandleOpenRecentFile(11)
+    def HandleOpenRecentFile12(self):
+        self.HandleOpenRecentFile(12)
+    def HandleOpenRecentFile13(self):
+        self.HandleOpenRecentFile(13)
+    def HandleOpenRecentFile14(self):
+        self.HandleOpenRecentFile(14)
+    def HandleOpenRecentFile(self, number):
+        """
+        Open a recently opened level picked from the main menu
+        """
+        if mainWindow.CheckDirty(): return
+
+        if not mainWindow.LoadLevel(None, self.FileList[number], True, 1): self.RemoveFromList(number)
 
 class SpriteDefinition():
     """
@@ -727,355 +2111,333 @@ class SpriteDefinition():
 
                 fields.append((3, attribs['title'], startbit, bitnum, comment))
 
-
-def LoadSpriteData():
+class Metadata():
     """
-    Ensures that the sprite data info is loaded
+    Class for the new level metadata system
     """
-    global Sprites
+    # This new system is much more useful and flexible than the old
+    # system, but is incompatible with older versions of Reggie.
+    # They will fail to understand the data, and skip it like it
+    # doesn't exist. The new system is written with forward-compatibility
+    # in mind. Thus, when newer versions of Reggie are created
+    # with new metadata values, they will be easily able to add to
+    # the existing ones. In addition, the metadata system is lossless,
+    # so unrecognized values will be preserved when you open and save.
 
-    Sprites = [None] * 724
-    errors = []
-    errortext = []
+    # Type values:
+    # 0 = binary
+    # 1 = string
+    # 2+ = undefined as of now - future Reggies can use them
+    # Theoretical limit to type values is 4,294,967,296
 
-    # It works this way so that it can overwrite settings based on order of precedence
-    paths = []
-    paths.append((trans.files['spritedata'], None))
-    for pathtuple in gamedef.multipleRecursiveFiles('spritedata', 'spritenames'): paths.append(pathtuple)
-
-
-    for sdpath, snpath in paths:
-
-        # Add XML sprite data, if there is any
-        if sdpath not in (None, ''):
-            path = sdpath if isinstance(sdpath, str) else sdpath.path
-            tree = etree.parse(path)
-            root = tree.getroot()
-
-            for sprite in root:
-                if sprite.tag.lower() != 'sprite': continue
-
-                try: spriteid = int(sprite.attrib['id'])
-                except ValueError: continue
-                spritename = sprite.attrib['name']
-                notes = None
-                relatedObjFiles = None
-
-                if 'notes' in sprite.attrib:
-                    notes = trans.string('SpriteDataEditor', 2, '[notes]', sprite.attrib['notes'])
-
-                if 'files' in sprite.attrib:
-                    relatedObjFiles = trans.string('SpriteDataEditor', 8, '[list]', sprite.attrib['files'].replace(';', '<br>'))
-
-                sdef = SpriteDefinition()
-                sdef.id = spriteid
-                sdef.name = spritename
-                sdef.notes = notes
-                sdef.relatedObjFiles = relatedObjFiles
-
-                try:
-                    sdef.loadFrom(sprite)
-                except Exception as e:
-                    errors.append(str(spriteid))
-                    errortext.append(str(e))
-
-                Sprites[spriteid] = sdef
-
-        # Add TXT sprite names, if there are any
-        # This code is only ever run when a custom
-        # gamedef is loaded, because spritenames.txt
-        # is a file only ever used by custom gamedefs.
-        if (snpath is not None) and (snpath.path is not None):
-            snfile = open(snpath.path)
-            data = snfile.read()
-            snfile.close()
-            del snfile
-
-            # Split the data
-            data = data.split('\n')
-            for i, line in enumerate(data): data[i] = line.split(':')
-
-            # Apply it
-            for spriteid, name in data:
-                Sprites[int(spriteid)].name = name
-
-    # Warn the user if errors occurred
-    if len(errors) > 0:
-        QtWidgets.QMessageBox.warning(None, trans.string('Err_BrokenSpriteData', 0), trans.string('Err_BrokenSpriteData', 1, '[sprites]', ', '.join(errors)), QtWidgets.QMessageBox.Ok)
-        QtWidgets.QMessageBox.warning(None, trans.string('Err_BrokenSpriteData', 2), repr(errortext))
-
-SpriteCategories = None
-def LoadSpriteCategories(reload_=False):
-    """
-    Ensures that the sprite category info is loaded
-    """
-    global Sprites, SpriteCategories
-    if (SpriteCategories is not None) and not reload_: return
-
-    paths, isPatch = gamedef.recursiveFiles('spritecategories', True)
-    if isPatch:
-        new = []
-        new.append(trans.files['spritecategories'])
-        for path in paths: new.append(path)
-        paths = new
-
-    SpriteCategories = []
-    for path in paths:
-        tree = etree.parse(path)
-        root = tree.getroot()
-
-        CurrentView = None
-        for view in root:
-            if view.tag.lower() != 'view': continue
-
-            viewname = view.attrib['name']
-
-            # See if it's in there already
-            CurrentView = []
-            for potentialview in SpriteCategories:
-                if potentialview[0] == viewname: CurrentView = potentialview[1]
-            if CurrentView == []: SpriteCategories.append((viewname, CurrentView, []))
-
-            CurrentCategory = None
-            for category in view:
-                if category.tag.lower() != 'category': continue
-
-                catname = category.attrib['name']
-
-                # See if it's in there already
-                CurrentCategory = []
-                for potentialcat in CurrentView:
-                    if potentialcat[0] == catname: CurrentCategory = potentialcat[1]
-                if CurrentCategory == []: CurrentView.append((catname, CurrentCategory))
-
-                for attach in category:
-                    if attach.tag.lower() != 'attach': continue
-
-                    sprite = attach.attrib['sprite']
-                    if '-' not in sprite:
-                        if int(sprite) not in CurrentCategory:
-                            CurrentCategory.append(int(sprite))
-                    else:
-                        x = sprite.split('-')
-                        for i in range(int(x[0]), int(x[1])+1):
-                            if i not in CurrentCategory:
-                                CurrentCategory.append(i)
-
-    # Add a Search category
-    SpriteCategories.append((trans.string('Sprites', 19), [(trans.string('Sprites', 16), list(range(0, 724)))], []))
-    SpriteCategories[-1][1][0][1].append(9999) # 'no results' special case
-
-
-SpriteListData = None
-def LoadSpriteListData(reload_=False):
-    """
-    Ensures that the sprite list modifier data is loaded
-    """
-    global SpriteListData
-    if (SpriteListData is not None) and not reload_: return
-
-    paths = gamedef.recursiveFiles('spritelistdata')
-    new = []
-    new.append('reggiedata/spritelistdata.txt')
-    for path in paths: new.append(path)
-    paths = new
-
-    SpriteListData = []
-    for i in range(24): SpriteListData.append([])
-    for path in paths:
-        f = open(path)
-        data = f.read()
-        f.close()
-
-        split = data.replace('\n', '').split(';')
-        for lineidx in range(24):
-            line = split[lineidx]
-            splitline = line.split(',')
-            splitlinelist = []
-
-            # Add them
-            for item in splitline:
-                try: newitem = int(item)
-                except ValueError: continue
-                if newitem in SpriteListData[lineidx]: continue
-                SpriteListData[lineidx].append(newitem)
-            SpriteListData[lineidx].sort()
-
-
-EntranceTypeNames = None
-def LoadEntranceNames(reload_=False):
-    """
-    Ensures that the entrance names are loaded
-    """
-    global EntranceTypeNames
-    if (EntranceTypeNames is not None) and not reload_: return
-
-    paths, isPatch = gamedef.recursiveFiles('entrancetypes', True)
-    if isPatch:
-        new = []
-        new.append(trans.files['entrancetypes'])
-        for path in paths: new.append(path)
-        paths = new
-
-    NameList = {}
-    for path in paths:
-        getit = open(path, 'r')
-        newNames = {}
-        for line in getit.readlines(): newNames[int(line.split(':')[0])] = line.split(':')[1].replace('\n', '')
-        for idx in newNames: NameList[idx] = newNames[idx]
-
-    EntranceTypeNames = []
-    idx = 0
-    while idx in NameList:
-        EntranceTypeNames.append(trans.string('EntranceDataEditor', 28, '[id]', idx, '[name]', NameList[idx]))
-        idx += 1
-
-
-class ChooseLevelNameDialog(QtWidgets.QDialog):
-    """
-    Dialog which lets you choose a level from a list
-    """
-    def __init__(self):
+    def __init__(self, data=None):
         """
-        Creates and initializes the dialog
+        Creates a metadata object with the data given
         """
-        QtWidgets.QDialog.__init__(self)
-        self.setWindowTitle(trans.string('OpenFromNameDlg', 0))
-        self.setWindowIcon(GetIcon('open'))
-        LoadLevelNames()
-        self.currentlevel = None
+        self.DataDict = {}
+        if data is None: return
 
-        # create the tree
-        tree = QtWidgets.QTreeWidget()
-        tree.setColumnCount(1)
-        tree.setHeaderHidden(True)
-        tree.setIndentation(16)
-        tree.currentItemChanged.connect(self.HandleItemChange)
-        tree.itemActivated.connect(self.HandleItemActivated)
+        if data[0:4] != b'MD2_':
+            # This is old-style metadata - convert it
+            try:
+                strdata = ''
+                for d in data: strdata += chr(d)
+                level_info = pickle.loads(strdata)
+                for k, v in level_info.iteritems():
+                    self.setStrData(k, v)
+            except Exception: pass
+            if ('Website' not in self.DataDict) and ('Webpage' in self.DataDict):
+                self.DataDict['Website'] = self.DataDict['Webpage']
+            return
 
-        # add items (LevelNames is effectively a big category)
-        tree.addTopLevelItems(self.ParseCategory(LevelNames))
+        # Iterate through the data
+        idx = 4
+        while idx < len(data) - 4:
 
-        # assign it to self.leveltree
-        self.leveltree = tree
+            # Read the next (first) four bytes - the key length
+            rawKeyLen = data[idx:idx+4]
+            idx += 4
 
-        # create the buttons
-        self.buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        self.buttonBox.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(False)
+            keyLen = (rawKeyLen[0] << 24) | (rawKeyLen[1] << 16) | (rawKeyLen[2] << 8) | rawKeyLen[3]
 
-        self.buttonBox.accepted.connect(self.accept)
-        self.buttonBox.rejected.connect(self.reject)
+            # Read the next (key length) bytes - the key (as a str)
+            rawKey = data[idx:idx+keyLen]
+            idx += keyLen
 
-        # create the layout
-        layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(self.leveltree)
-        layout.addWidget(self.buttonBox)
+            key = ''
+            for b in rawKey: key += chr(b)
 
-        self.setLayout(layout)
-        self.layout = layout
+            # Read the next four bytes - the number of type entries
+            rawTypeEntries = data[idx:idx+4]
+            idx += 4
 
-        self.setMinimumWidth(320) # big enough to fit "World 5: Freezeflame Volcano/Freezeflame Glacier"
-        self.setMinimumHeight(384)
+            typeEntries = (rawTypeEntries[0] << 24) | (rawTypeEntries[1] << 16) | (rawTypeEntries[2] << 8) | rawTypeEntries[3]
 
-    def ParseCategory(self, items):
+            # Iterate through each type entry
+            typeData = {}
+            for entry in range(typeEntries):
+
+                # Read the next four bytes - the type
+                rawType = data[idx:idx+4]
+                idx += 4
+
+                type = (rawType[0] << 24) | (rawType[1] << 16) | (rawType[2] << 8) | rawType[3]
+
+                # Read the next four bytes - the data length
+                rawDataLen = data[idx:idx+4]
+                idx += 4
+
+                dataLen = (rawDataLen[0] << 24) | (rawDataLen[1] << 16) | (rawDataLen[2] << 8) | rawDataLen[3]
+
+                # Read the next (data length) bytes - the data (as bytes)
+                entryData = data[idx:idx+dataLen]
+                idx += dataLen
+
+                # Add it to typeData
+                self.setOtherData(key, type, entryData)
+
+
+    def binData(self, key):
         """
-        Parses a XML category
+        Returns the binary data associated with key
         """
-        nodes = []
-        for item in items:
-            node = QtWidgets.QTreeWidgetItem()
-            node.setText(0, item[0])
-            # see if it's a category or a level
-            if isinstance(item[1], str):
-                # it's a level
-                node.setData(0, Qt.UserRole, item[1])
-                node.setToolTip(0, item[1] + '.szs')
-            else:
-                # it's a category
-                children = self.ParseCategory(item[1])
-                for cnode in children:
-                    node.addChild(cnode)
-                node.setToolTip(0, item[0])
-            nodes.append(node)
-        return tuple(nodes)
+        return self.otherData(key, 0)
 
-    @QtCore.pyqtSlot(QtWidgets.QTreeWidgetItem, QtWidgets.QTreeWidgetItem)
-    def HandleItemChange(self, current, previous):
+    def strData(self, key):
         """
-        Catch the selected level and enable/disable OK button as needed
+        Returns the string data associated with key
         """
-        self.currentlevel = current.data(0, Qt.UserRole)
-        if self.currentlevel is None:
-            self.buttonBox.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(False)
-        else:
-            self.buttonBox.button(QtWidgets.QDialogButtonBox.Ok).setEnabled(True)
-            self.currentlevel = str(self.currentlevel)
+        data = self.otherData(key, 1)
+        if data is None: return
+        s = ''
+        for d in data: s += chr(d)
+        return s
 
-
-    @QtCore.pyqtSlot(QtWidgets.QTreeWidgetItem, int)
-    def HandleItemActivated(self, item, column):
+    def otherData(self, key, type):
         """
-        Handle a doubleclick on a level
+        Returns unknown data, with the given type value, associated with key (as binary data)
         """
-        self.currentlevel = item.data(0, Qt.UserRole)
-        if self.currentlevel is not None:
-            self.currentlevel = str(self.currentlevel)
-            self.accept()
+        if key not in self.DataDict: return
+        if type not in self.DataDict[key]: return
+        return self.DataDict[key][type]
 
+    def setBinData(self, key, value):
+        """
+        Sets binary data, overwriting any existing binary data with that key
+        """
+        self.setOtherData(key, 0, value)
 
-Tiles = None # 0x200 tiles per tileset, plus 64 for each type of override
-TilesetFilesLoaded = [None, None, None, None]
-TilesetAnimTimer = None
-TilesetCache = {} # Tileset cache, to avoid reloading when possible
-TilesetCompletelyCached = {}
-TileThreads = [None, None, None, None] # holds tileset-rendering threads
-Overrides = None # 320 tiles, this is put into Tiles usually
-TileBehaviours = None
-ObjectDefinitions = None # 4 tilesets
-TilesetsAnimating = False
+    def setStrData(self, key, value):
+        """
+        Sets string data, overwriting any existing string data with that key
+        """
+        data = []
+        for char in value: data.append(ord(char))
+        self.setOtherData(key, 1, data)
 
-class ObjectDef():
+    def setOtherData(self, key, type, value):
+        """
+        Sets other (binary) data, overwriting any existing data with that key and type
+        """
+        if key not in self.DataDict: self.DataDict[key] = {}
+        self.DataDict[key][type] = value
+
+    def save(self):
+        """
+        Returns a bytes object that can later be loaded from
+        """
+
+        # Sort self.DataDict
+        dataDictSorted = []
+        for dataKey in self.DataDict: dataDictSorted.append((dataKey, self.DataDict[dataKey]))
+        dataDictSorted.sort(key=lambda entry: entry[0])
+
+        data = []
+
+        # Add 'MD2_'
+        data.append(ord('M'))
+        data.append(ord('D'))
+        data.append(ord('2'))
+        data.append(ord('_'))
+
+        # Iterate through self.DataDict
+        for dataKey, types in dataDictSorted:
+
+            # Add the key length (4 bytes)
+            keyLen = len(dataKey)
+            data.append(keyLen >> 24)
+            data.append((keyLen >> 16) & 0xFF)
+            data.append((keyLen >> 8) & 0xFF)
+            data.append(keyLen & 0xFF)
+
+            # Add the key (key length bytes)
+            for char in dataKey: data.append(ord(char))
+
+            # Sort the types
+            typesSorted = []
+            for type in types: typesSorted.append((type, types[type]))
+            typesSorted.sort(key=lambda entry: entry[0])
+
+            # Add the number of types (4 bytes)
+            typeNum = len(typesSorted)
+            data.append(typeNum >> 24)
+            data.append((typeNum >> 16) & 0xFF)
+            data.append((typeNum >> 8) & 0xFF)
+            data.append(typeNum & 0xFF)
+
+            # Iterate through typesSorted
+            for type, typeData in typesSorted:
+
+                # Add the type (4 bytes)
+                data.append(type >> 24)
+                data.append((type >> 16) & 0xFF)
+                data.append((type >> 8) & 0xFF)
+                data.append(type & 0xFF)
+
+                # Add the data length (4 bytes)
+                dataLen = len(typeData)
+                data.append(dataLen >> 24)
+                data.append((dataLen >> 16) & 0xFF)
+                data.append((dataLen >> 8) & 0xFF)
+                data.append(dataLen & 0xFF)
+
+                # Add the data (data length bytes)
+                for d in typeData: data.append(d)
+
+        return data
+
+def clipStr(text, idealWidth, font=None):
     """
-    Class for the object definitions
+    Returns a shortened string, or None if it need not be shortened
+    """
+    if font is None: font = QtGui.QFont()
+    width = QtGui.QFontMetrics(font).width(text)
+    if width <= idealWidth: return None
+
+    while width > idealWidth:
+        text = text[:-1]
+        width = QtGui.QFontMetrics(font).width(text)
+
+    return text
+
+def setting(name, default=None):
+    """
+    Thin wrapper around QSettings, fixes the type=bool bug
+    """
+    result = settings.value(name, default)
+    if result == 'false': return False
+    elif result == 'true': return True
+    elif result == 'none': return None
+    else: return result
+
+def setSetting(name, value):
+    """
+    Thin wrapper around QSettings
+    """
+    return settings.setValue(name, value)
+
+def module_path():
+    """
+    This will get us the program's directory, even if we are frozen using cx_Freeze
+    """
+    if hasattr(sys, 'frozen'):
+        return os.path.dirname(sys.executable)
+    if __name__ == '__main__':
+        return os.path.dirname(os.path.abspath(sys.argv[0]))
+    return None
+
+def SetGamePath(newpath):
+    """
+    Sets the NSMBWii game path
+    """
+    global gamedef
+
+    # you know what's fun?
+    # isValidGamePath crashes in os.path.join if QString is used..
+    # so we must change it to a Python string manually
+    gamedef.SetGamePath(str(newpath))
+
+# USELESS
+def calculateBgAlignmentMode(idA, idB, idC):
+    """
+    Calculates alignment modes using the exact same logic as NSMBW
+    """
+    return 0
+
+#####################################################################
+########################## TILESET-RELATED ##########################
+#####################################################################
+
+class StoppableThread(threading.Thread):
+    """
+    Thread class with a stop() method. The thread itself has to check
+    regularly for the stopped() condition.
+    http://stackoverflow.com/a/325528
     """
 
     def __init__(self):
-        """
-        Constructor
-        """
-        self.width = 0
-        self.height = 0
-        self.rows = []
+        super(StoppableThread, self).__init__()
+        self._stop_event = threading.Event()
 
-    def load(self, source, offset, tileoffset):
-        """
-        Load an object definition
-        """
-        i = offset
-        row = []
+    def stop(self):
+        self._stop_event.set()
 
-        while True:
-            cbyte = source[i]
+    def stopped(self):
+        return self._stop_event.isSet()
 
-            if cbyte == 0xFE:
-                self.rows.append(row)
-                i += 1
-                row = []
-            elif cbyte == 0xFF:
-                return
-            elif (cbyte & 0x80) != 0:
-                row.append((cbyte,))
-                i += 1
-            else:
-                # extra = source[i+2]
-                # tilesetoffset = ((extra & 7) >> 1) * 256
-                # tile = (cbyte, source[i+1] + tilesetoffset, extra >> 2)
-                # row.append(tile)
-                # i += 3
-                extra = source[i+2]
-                tile = [cbyte, source[i+1] | ((extra & 3) << 8), extra >> 2]
-                row.append(tile)
-                i += 3
+
+class ProgressiveTilesetRenderingThread(StoppableThread):
+    """
+    Thread that renders tilesets progressively.
+    It's a StoppableThread which allows the operation
+    to be killed (say, when the user opens a new level
+    before the current level's tilesets are finished
+    rendering).
+    """
+    @staticmethod
+    def getTileFromImage(tilemap, xtilenum, ytilenum):
+        return tilemap.copy((xtilenum * 64) + 2, (ytilenum * 64) + 2, 60, 60)
+
+    def setStuff(self, comptiledata, tilesetIdx, tileoffset, name):
+        """
+        Sets settings that the thread will use
+        """
+        self.comptiledata = comptiledata
+        self.tilesetIdx = tilesetIdx
+        self.tileoffset = tileoffset
+        self.tilesetname = name
+        self.name = name # thread name
+
+    def run(self):
+        """
+        Renders tilesets progressively
+        """
+
+        TilesetCompletelyCached[self.tilesetname] = False
+
+        ProcessOverrides(self.tilesetIdx, self.tilesetname)
+
+        for image in gtx.renderGTX(gtx.loadGTX(self.comptiledata)):
+
+            if self.stopped(): return
+
+            pix = QtGui.QPixmap.fromImage(image)
+            sourcex = 0
+            sourcey = 0
+            for i in range(self.tileoffset, self.tileoffset + 256):
+                if Tiles[i] is not None and not Tiles[i].isOverridden:
+                    Tiles[i].setMain(self.getTileFromImage(pix, sourcex, sourcey))
+                sourcex += 1
+                if sourcex >= 32:
+                    sourcex = 0
+                    sourcey += 1
+
+            mainWindow.scene.update()
+            mainWindow.objPicker.LoadFromTilesets()
+
+            if self.stopped(): return
+
+        TilesetCompletelyCached[self.tilesetname] = True
 
 
 class TilesetTile():
@@ -1582,254 +2944,48 @@ class TilesetTile():
         self.isOverridden = True
 
 
-def RenderObject(tileset, objnum, width, height, fullslope=False):
+class ObjectDef():
     """
-    Render a tileset object into an array
+    Class for the object definitions
     """
-    # allocate an array
-    dest = []
-    for i in range(height): dest.append([0]*width)
 
-    # ignore non-existent objects
-    try:
-        tileset_defs = ObjectDefinitions[tileset]
-    except IndexError:
-        tileset_defs = None
-    if tileset_defs is None: return dest
-    try:
-        obj = tileset_defs[objnum]
-    except IndexError:
-        obj = None
-    if obj is None: return dest
-    if len(obj.rows) == 0: return dest
+    def __init__(self):
+        """
+        Constructor
+        """
+        self.width = 0
+        self.height = 0
+        self.rows = []
 
-    # diagonal objects are rendered differently
-    if (obj.rows[0][0][0] & 0x80) != 0:
-        RenderDiagonalObject(dest, obj, width, height, fullslope)
-    else:
-        # standard object
-        repeatFound = False
-        beforeRepeat = []
-        inRepeat = []
-        afterRepeat = []
+    def load(self, source, offset, tileoffset):
+        """
+        Load an object definition
+        """
+        i = offset
+        row = []
 
-        for row in obj.rows:
-            if len(row) == 0: continue
-            # row[0][0] is 0, 1, 2, 4
-            if (row[0][0] & 2) != 0 or (row[0][0] & 4) != 0:
-                repeatFound = True
-                inRepeat.append(row)
+        while True:
+            cbyte = source[i]
+
+            if cbyte == 0xFE:
+                self.rows.append(row)
+                i += 1
+                row = []
+            elif cbyte == 0xFF:
+                return
+            elif (cbyte & 0x80) != 0:
+                row.append((cbyte,))
+                i += 1
             else:
-                if repeatFound:
-                    afterRepeat.append(row)
-                else:
-                    beforeRepeat.append(row)
-
-        bc = len(beforeRepeat); ic = len(inRepeat); ac = len(afterRepeat)
-        if ic == 0:
-            for y in range(height):
-                RenderStandardRow(dest[y], beforeRepeat[y % bc], y, width)
-        else:
-            afterthreshold = height - ac - 1
-            for y in range(height):
-                if y < bc:
-                    RenderStandardRow(dest[y], beforeRepeat[y], y, width)
-                elif y > afterthreshold:
-                    RenderStandardRow(dest[y], afterRepeat[y - height + ac], y, width)
-                else:
-                    RenderStandardRow(dest[y], inRepeat[(y - bc) % ic], y, width)
-
-    return dest
-
-
-def RenderStandardRow(dest, row, y, width):
-    """
-    Render a row from an object
-    """
-    repeatFound = False
-    beforeRepeat = []
-    inRepeat = []
-    afterRepeat = []
-
-    for tile in row:
-        # NSMBU introduces two (?) new ways to define horizontal tiling, IN ADDITION TO the original one
-        tiling = False
-        tiling = tiling or ((tile[2] & 1) != 0 and (tile[0] & 1) != 0) # NSMBW-style (still applies to NSMBU)
-        tiling = tiling or ((row[0][0] & 4) != 0 and (tile[0] & 4) == 0) # NSMBU-style (J_Kihon BG rocks)
-        tiling = tiling or ((tile[0] & 1) != 0) # NSMBU-style (horizontal pipes)
-
-        if tiling:
-            repeatFound = True
-            inRepeat.append(tile)
-        else:
-            if repeatFound:
-                afterRepeat.append(tile)
-            else:
-                beforeRepeat.append(tile)
-
-    bc = len(beforeRepeat); ic = len(inRepeat); ac = len(afterRepeat)
-    if ic == 0:
-        for x in range(width):
-            dest[x] = beforeRepeat[x % bc][1]
-    else:
-        afterthreshold = width - ac - 1
-        for x in range(width):
-            if x < bc:
-                dest[x] = beforeRepeat[x][1]
-            elif x > afterthreshold:
-                dest[x] = afterRepeat[x - width + ac][1]
-            else:
-                dest[x] = inRepeat[(x - bc) % ic][1]
-
-
-def RenderDiagonalObject(dest, obj, width, height, fullslope):
-    """
-    Render a diagonal object
-    """
-    # set all to empty tiles
-    for row in dest:
-        for x in range(width):
-            row[x] = -1
-
-    # get sections
-    mainBlock,subBlock = GetSlopeSections(obj)
-    cbyte = obj.rows[0][0][0]
-
-    # get direction
-    goLeft = ((cbyte & 1) != 0)
-    goDown = ((cbyte & 2) != 0)
-
-    # base the amount to draw by seeing how much we can fit in each direction
-    if fullslope:
-        drawAmount = max(height // len(mainBlock), width // len(mainBlock[0]))
-    else:
-        drawAmount = min(height // len(mainBlock), width // len(mainBlock[0]))
-
-    # if it's not goingLeft and not goingDown:
-    if not goLeft and not goDown:
-        # slope going from SW => NE
-        # start off at the bottom left
-        x = 0
-        y = height - len(mainBlock) - (0 if subBlock is None else len(subBlock))
-        xi = len(mainBlock[0])
-        yi = -len(mainBlock)
-
-    # ... and if it's goingLeft and not goingDown:
-    elif goLeft and not goDown:
-        # slope going from SE => NW
-        # start off at the top left
-        x = 0
-        y = 0
-        xi = len(mainBlock[0])
-        yi = len(mainBlock)
-
-    # ... and if it's not goingLeft but it's goingDown:
-    elif not goLeft and goDown:
-        # slope going from NW => SE
-        # start off at the top left
-        x = 0
-        y = (0 if subBlock is None else len(subBlock))
-        xi = len(mainBlock[0])
-        yi = len(mainBlock)
-
-    # ... and finally, if it's goingLeft and goingDown:
-    else:
-        # slope going from SW => NE
-        # start off at the bottom left
-        x = 0
-        y = height - len(mainBlock)
-        xi = len(mainBlock[0])
-        yi = -len(mainBlock)
-
-
-    # finally draw it
-    for i in range(drawAmount):
-        PutObjectArray(dest, x, y, mainBlock, width, height)
-        if subBlock is not None:
-            xb = x
-            if goLeft: xb = x + len(mainBlock[0]) - len(subBlock[0])
-            if goDown:
-                PutObjectArray(dest, xb, y - len(subBlock), subBlock, width, height)
-            else:
-                PutObjectArray(dest, xb, y + len(mainBlock), subBlock, width, height)
-        x += xi
-        y += yi
-
-
-def PutObjectArray(dest, xo, yo, block, width, height):
-    """
-    Places a tile array into an object
-    """
-    #for y in range(yo,min(yo+len(block),height)):
-    for y in range(yo,yo+len(block)):
-        if y < 0: continue
-        if y >= height: continue
-        drow = dest[y]
-        srow = block[y-yo]
-        #for x in range(xo,min(xo+len(srow),width)):
-        for x in range(xo,xo+len(srow)):
-            if x < 0: continue
-            if x >= width: continue
-            drow[x] = srow[x-xo][1]
-
-
-def GetSlopeSections(obj):
-    """
-    Sorts the slope data into sections
-    """
-    sections = []
-    currentSection = None
-
-    for row in obj.rows:
-        if len(row) > 0 and (row[0][0] & 0x80) != 0: # begin new section
-            if currentSection is not None:
-                sections.append(CreateSection(currentSection))
-            currentSection = []
-        currentSection.append(row)
-
-    if currentSection is not None: # end last section
-        sections.append(CreateSection(currentSection))
-
-    if len(sections) == 1:
-        return (sections[0],None)
-    else:
-        return (sections[0],sections[1])
-
-
-def CreateSection(rows):
-    """
-    Create a slope section
-    """
-    # calculate width
-    width = 0
-    for row in rows:
-        thiswidth = CountTiles(row)
-        if width < thiswidth: width = thiswidth
-
-    # create the section
-    section = []
-    for row in rows:
-        drow = [0] * width
-        x = 0
-        for tile in row:
-            if (tile[0] & 0x80) == 0:
-                drow[x] = tile
-                x += 1
-        section.append(drow)
-
-    return section
-
-
-def CountTiles(row):
-    """
-    Counts the amount of real tiles in an object row
-    """
-    res = 0
-    for tile in row:
-        if (tile[0] & 0x80) == 0:
-            res += 1
-    return res
-
+                # extra = source[i+2]
+                # tilesetoffset = ((extra & 7) >> 1) * 256
+                # tile = (cbyte, source[i+1] + tilesetoffset, extra >> 2)
+                # row.append(tile)
+                # i += 3
+                extra = source[i+2]
+                tile = [cbyte, source[i+1] | ((extra & 3) << 8), extra >> 2]
+                row.append(tile)
+                i += 3
 
 def CreateTilesets():
     """
@@ -1846,88 +3002,6 @@ def CreateTilesets():
     TilesetAnimTimer.start(180)
     ObjectDefinitions = [None]*4
     SLib.Tiles = Tiles
-
-
-def LoadTileset(idx, name, reload=False):
-    try:
-        return _LoadTileset(idx, name, reload)
-    except Exception:
-        raise
-        QtWidgets.QMessageBox.warning(None, trans.string('Err_CorruptedTileset', 0), trans.string('Err_CorruptedTileset', 1, '[file]', name))
-        return False
-
-
-class StoppableThread(threading.Thread):
-    """
-    Thread class with a stop() method. The thread itself has to check
-    regularly for the stopped() condition.
-    http://stackoverflow.com/a/325528
-    """
-
-    def __init__(self):
-        super(StoppableThread, self).__init__()
-        self._stop_event = threading.Event()
-
-    def stop(self):
-        self._stop_event.set()
-
-    def stopped(self):
-        return self._stop_event.isSet()
-
-
-class ProgressiveTilesetRenderingThread(StoppableThread):
-    """
-    Thread that renders tilesets progressively.
-    It's a StoppableThread which allows the operation
-    to be killed (say, when the user opens a new level
-    before the current level's tilesets are finished
-    rendering).
-    """
-    @staticmethod
-    def getTileFromImage(tilemap, xtilenum, ytilenum):
-        return tilemap.copy((xtilenum * 64) + 2, (ytilenum * 64) + 2, 60, 60)
-
-    def setStuff(self, comptiledata, tilesetIdx, tileoffset, name):
-        """
-        Sets settings that the thread will use
-        """
-        self.comptiledata = comptiledata
-        self.tilesetIdx = tilesetIdx
-        self.tileoffset = tileoffset
-        self.tilesetname = name
-        self.name = name # thread name
-
-    def run(self):
-        """
-        Renders tilesets progressively
-        """
-
-        TilesetCompletelyCached[self.tilesetname] = False
-
-        ProcessOverrides(self.tilesetIdx, self.tilesetname)
-
-        for image in gtx.renderGTX(gtx.loadGTX(self.comptiledata)):
-
-            if self.stopped(): return
-
-            pix = QtGui.QPixmap.fromImage(image)
-            sourcex = 0
-            sourcey = 0
-            for i in range(self.tileoffset, self.tileoffset + 256):
-                if Tiles[i] is not None and not Tiles[i].isOverridden:
-                    Tiles[i].setMain(self.getTileFromImage(pix, sourcex, sourcey))
-                sourcex += 1
-                if sourcex >= 32:
-                    sourcex = 0
-                    sourcey += 1
-
-            mainWindow.scene.update()
-            mainWindow.objPicker.LoadFromTilesets()
-
-            if self.stopped(): return
-
-        TilesetCompletelyCached[self.tilesetname] = True
-
 
 def _LoadTileset(idx, name, reload=False):
     """
@@ -2036,6 +3110,70 @@ def _LoadTileset(idx, name, reload=False):
     # Add Tiles to spritelib
     SLib.Tiles = Tiles
 
+def CascadeTilesetNames_Category(lower, upper):
+    """
+    Applies upper as a patch of lower
+    """
+    lower = list(lower)
+    for item in upper:
+
+        if isinstance(item[1], tuple) or isinstance(item[1], list):
+            # It's a category
+
+            found = False
+            for i, lowitem in enumerate(lower):
+                lowitem = lower[i]
+                if lowitem[0] == item[0]: # names are ==
+                    lower[i] = list(lower[i])
+                    lower[i][1] = CascadeTilesetNames_Category(lowitem[1], item[1])
+                    found = True
+                    break
+
+            if not found:
+                i = 0
+                while (i < len(lower)) and (isinstance(lower[i][1], tuple) or isinstance(lower[i][1], list)): i += 1
+                lower.insert(i+1, item)
+
+        else: # It's a tileset entry
+            found = False
+            for i, lowitem in enumerate(lower):
+                lowitem = lower[i]
+                if lowitem[0] == item[0]: # filenames are ==
+                    lower[i] = list(lower[i])
+                    lower[i][1] = item[1]
+                    found = True
+                    break
+
+            if not found: lower.append(item)
+    return lower
+
+def SortTilesetNames_Category(cat):
+    """
+    Sorts a tileset names category
+    """
+    cat = list(cat)
+
+    # First, remove all category nodes
+    cats = []
+    for node in cat:
+        if isinstance(node[1], tuple) or isinstance(node[1], list):
+            cats.append(node)
+    for node in cats: cat.remove(node)
+
+    # Sort the tileset names
+    cat.sort(key=lambda entry: entry[1])
+
+    # Sort the data within each category
+    for i, cat_ in enumerate(cats):
+        cats[i] = list(cat_)
+        if not cats[i][2]: cats[i][1] = SortTilesetNames_Category(cats[i][1])
+
+    # Put them back together
+    new = []
+    for category in cats: new.append(tuple(category))
+    for tileset in cat: new.append(tuple(tileset))
+    return tuple(new)
+
 def IncrementTilesetFrame():
     """
     Moves each tileset to the next frame
@@ -2045,7 +3183,6 @@ def IncrementTilesetFrame():
         if tile is not None: tile.nextFrame()
     mainWindow.scene.update()
     mainWindow.objPicker.update()
-
 
 def UnloadTileset(idx):
     """
@@ -2057,6 +3194,247 @@ def UnloadTileset(idx):
     ObjectDefinitions[idx] = None
     TilesetFilesLoaded[idx] = None
 
+def CountTiles(row):
+    """
+    Counts the amount of real tiles in an object row
+    """
+    res = 0
+    for tile in row:
+        if (tile[0] & 0x80) == 0:
+            res += 1
+    return res
+
+def CreateSection(rows):
+    """
+    Create a slope section
+    """
+    # calculate width
+    width = 0
+    for row in rows:
+        thiswidth = CountTiles(row)
+        if width < thiswidth: width = thiswidth
+
+    # create the section
+    section = []
+    for row in rows:
+        drow = [0] * width
+        x = 0
+        for tile in row:
+            if (tile[0] & 0x80) == 0:
+                drow[x] = tile
+                x += 1
+        section.append(drow)
+
+    return section
+
+def PutObjectArray(dest, xo, yo, block, width, height):
+    """
+    Places a tile array into an object
+    """
+    #for y in range(yo,min(yo+len(block),height)):
+    for y in range(yo,yo+len(block)):
+        if y < 0: continue
+        if y >= height: continue
+        drow = dest[y]
+        srow = block[y-yo]
+        #for x in range(xo,min(xo+len(srow),width)):
+        for x in range(xo,xo+len(srow)):
+            if x < 0: continue
+            if x >= width: continue
+            drow[x] = srow[x-xo][1]
+
+def RenderObject(tileset, objnum, width, height, fullslope=False):
+    """
+    Render a tileset object into an array
+    """
+    # allocate an array
+    dest = []
+    for i in range(height): dest.append([0]*width)
+
+    # ignore non-existent objects
+    try:
+        tileset_defs = ObjectDefinitions[tileset]
+    except IndexError:
+        tileset_defs = None
+    if tileset_defs is None: return dest
+    try:
+        obj = tileset_defs[objnum]
+    except IndexError:
+        obj = None
+    if obj is None: return dest
+    if len(obj.rows) == 0: return dest
+
+    # diagonal objects are rendered differently
+    if (obj.rows[0][0][0] & 0x80) != 0:
+        RenderDiagonalObject(dest, obj, width, height, fullslope)
+    else:
+        # standard object
+        repeatFound = False
+        beforeRepeat = []
+        inRepeat = []
+        afterRepeat = []
+
+        for row in obj.rows:
+            if len(row) == 0: continue
+            # row[0][0] is 0, 1, 2, 4
+            if (row[0][0] & 2) != 0 or (row[0][0] & 4) != 0:
+                repeatFound = True
+                inRepeat.append(row)
+            else:
+                if repeatFound:
+                    afterRepeat.append(row)
+                else:
+                    beforeRepeat.append(row)
+
+        bc = len(beforeRepeat); ic = len(inRepeat); ac = len(afterRepeat)
+        if ic == 0:
+            for y in range(height):
+                RenderStandardRow(dest[y], beforeRepeat[y % bc], y, width)
+        else:
+            afterthreshold = height - ac - 1
+            for y in range(height):
+                if y < bc:
+                    RenderStandardRow(dest[y], beforeRepeat[y], y, width)
+                elif y > afterthreshold:
+                    RenderStandardRow(dest[y], afterRepeat[y - height + ac], y, width)
+                else:
+                    RenderStandardRow(dest[y], inRepeat[(y - bc) % ic], y, width)
+
+    return dest
+
+def RenderStandardRow(dest, row, y, width):
+    """
+    Render a row from an object
+    """
+    repeatFound = False
+    beforeRepeat = []
+    inRepeat = []
+    afterRepeat = []
+
+    for tile in row:
+        # NSMBU introduces two (?) new ways to define horizontal tiling, IN ADDITION TO the original one
+        tiling = False
+        tiling = tiling or ((tile[2] & 1) != 0 and (tile[0] & 1) != 0) # NSMBW-style (still applies to NSMBU)
+        tiling = tiling or ((row[0][0] & 4) != 0 and (tile[0] & 4) == 0) # NSMB2-style (J_Kihon BG rocks)
+        tiling = tiling or ((tile[0] & 1) != 0) # NSMBU-style (horizontal pipes)
+
+        if tiling:
+            repeatFound = True
+            inRepeat.append(tile)
+        else:
+            if repeatFound:
+                afterRepeat.append(tile)
+            else:
+                beforeRepeat.append(tile)
+
+    bc = len(beforeRepeat); ic = len(inRepeat); ac = len(afterRepeat)
+    if ic == 0:
+        for x in range(width):
+            dest[x] = beforeRepeat[x % bc][1]
+    else:
+        afterthreshold = width - ac - 1
+        for x in range(width):
+            if x < bc:
+                dest[x] = beforeRepeat[x][1]
+            elif x > afterthreshold:
+                dest[x] = afterRepeat[x - width + ac][1]
+            else:
+                dest[x] = inRepeat[(x - bc) % ic][1]
+
+def RenderDiagonalObject(dest, obj, width, height, fullslope):
+    """
+    Render a diagonal object
+    """
+    # set all to empty tiles
+    for row in dest:
+        for x in range(width):
+            row[x] = -1
+
+    # get sections
+    mainBlock,subBlock = GetSlopeSections(obj)
+    cbyte = obj.rows[0][0][0]
+
+    # get direction
+    goLeft = ((cbyte & 1) != 0)
+    goDown = ((cbyte & 2) != 0)
+
+    # base the amount to draw by seeing how much we can fit in each direction
+    if fullslope:
+        drawAmount = max(height // len(mainBlock), width // len(mainBlock[0]))
+    else:
+        drawAmount = min(height // len(mainBlock), width // len(mainBlock[0]))
+
+    # if it's not goingLeft and not goingDown:
+    if not goLeft and not goDown:
+        # slope going from SW => NE
+        # start off at the bottom left
+        x = 0
+        y = height - len(mainBlock) - (0 if subBlock is None else len(subBlock))
+        xi = len(mainBlock[0])
+        yi = -len(mainBlock)
+
+    # ... and if it's goingLeft and not goingDown:
+    elif goLeft and not goDown:
+        # slope going from SE => NW
+        # start off at the top left
+        x = 0
+        y = 0
+        xi = len(mainBlock[0])
+        yi = len(mainBlock)
+
+    # ... and if it's not goingLeft but it's goingDown:
+    elif not goLeft and goDown:
+        # slope going from NW => SE
+        # start off at the top left
+        x = 0
+        y = (0 if subBlock is None else len(subBlock))
+        xi = len(mainBlock[0])
+        yi = len(mainBlock)
+
+    # ... and finally, if it's goingLeft and goingDown:
+    else:
+        # slope going from SW => NE
+        # start off at the bottom left
+        x = 0
+        y = height - len(mainBlock)
+        xi = len(mainBlock[0])
+        yi = -len(mainBlock)
+
+
+    # finally draw it
+    for i in range(drawAmount):
+        PutObjectArray(dest, x, y, mainBlock, width, height)
+        if subBlock is not None:
+            xb = x
+            if goLeft: xb = x + len(mainBlock[0]) - len(subBlock[0])
+            if goDown:
+                PutObjectArray(dest, xb, y - len(subBlock), subBlock, width, height)
+            else:
+                PutObjectArray(dest, xb, y + len(mainBlock), subBlock, width, height)
+        x += xi
+        y += yi
+
+def GetSlopeSections(obj):
+    """
+    Sorts the slope data into sections
+    """
+    sections = []
+    currentSection = None
+
+    for row in obj.rows:
+        if len(row) > 0 and (row[0][0] & 0x80) != 0: # begin new section
+            if currentSection is not None:
+                sections.append(CreateSection(currentSection))
+            currentSection = []
+        currentSection.append(row)
+
+    if currentSection is not None: # end last section
+        sections.append(CreateSection(currentSection))
+
+    if len(sections) == 1:
+        return (sections[0],None)
+    else:
+        return (sections[0],sections[1])
 
 def ProcessOverrides(idx, name):
     """
@@ -2304,362 +3682,44 @@ def ProcessOverrides(idx, name):
                 replace += 1
 
             # Lines
-            # NEED IMPROVEMENT!
+            # NEED IMPROVEMENT FIRST!
             #t[].main = t[offset + ].main
 
     except Exception:
         print("Whoops, something went wrong while processing the overrides...")
 
-
-def LoadOverrides():
+def SimpleTilesetNames():
     """
-    Load overrides
+    simple
     """
-    global Overrides
-
-    OverrideBitmap = QtGui.QPixmap('reggiedata/overrides.png')
-    Overrides = [None]*256
-    idx = 0
-    xcount = OverrideBitmap.width() // TileWidth
-    ycount = OverrideBitmap.height() // TileWidth
-    sourcex = 0
-    sourcey = 0
-
-    for y in range(ycount):
-        for x in range(xcount):
-            bmp = OverrideBitmap.copy(sourcex, sourcey, TileWidth, TileWidth)
-            Overrides[idx] = TilesetTile(bmp)
-
-            # Set collisions if it's a brick or question
-            #if y <= 4:
-            #    if 8 < x < 20: Overrides[idx].setQuestionCollisions()
-            #    elif 20 <= x < 32: Overrides[idx].setBrickCollisions()
-
-            idx += 1
-            sourcex += TileWidth
-        sourcex = 0
-        sourcey += TileWidth
-        if idx % 16 != 0:
-            idx -= (idx % 16)
-            idx += 16
-
-
-def SetAppStyle():
-    """
-    Set the application window color
-    """
-    global app
-    global theme
-
-    # Change the color if applicable
-    #if theme.color('ui') is not None: app.setPalette(QtGui.QPalette(theme.color('ui')))
-
-    # Change the style
-    styleKey = setting('uiStyle')
-    style = QtWidgets.QStyleFactory.create(styleKey)
-    app.setStyle(style)
-
-
-Area = None
-Dirty = False
-DirtyOverride = 0
-AutoSaveDirty = False
-OverrideSnapping = False
-CurrentPaintType = -1
-CurrentObject = -1
-CurrentSprite = -1
-CurrentLayer = 1
-Layer0Shown = True
-Layer1Shown = True
-Layer2Shown = True
-SpritesShown = True
-SpriteImagesShown = True
-RealViewEnabled = False
-LocationsShown = True
-CommentsShown = True
-ObjectsFrozen = False
-SpritesFrozen = False
-EntrancesFrozen = False
-LocationsFrozen = False
-PathsFrozen = False
-CommentsFrozen = False
-PaintingEntrance = None
-PaintingEntranceListIndex = None
-NumberFont = None
-GridType = None
-RestoredFromAutoSave = False
-AutoSavePath = ''
-AutoSaveData = b''
-AutoOpenScriptEnabled = False
-CurrentLevelNameForAutoOpenScript = 'AAAAAAAAAAAAAAAAAAAAAAAAAA'
-
-def createHorzLine():
-    f = QtWidgets.QFrame()
-    f.setFrameStyle(QtWidgets.QFrame.HLine | QtWidgets.QFrame.Sunken)
-    return f
-
-def createVertLine():
-    f = QtWidgets.QFrame()
-    f.setFrameStyle(QtWidgets.QFrame.VLine | QtWidgets.QFrame.Sunken)
-    return f
-
-def LoadNumberFont():
-    """
-    Creates a valid font we can use to display the item numbers
-    """
-    global NumberFont
-    if NumberFont is not None: return
-
-    # this is a really crappy method, but I can't think of any other way
-    # normal Qt defines Q_WS_WIN and Q_WS_MAC but we don't have that here
-    s = QtCore.QSysInfo()
-    if hasattr(s, 'WindowsVersion'):
-        NumberFont = QtGui.QFont('Tahoma', (7/24) * TileWidth)
-    elif hasattr(s, 'MacintoshVersion'):
-        NumberFont = QtGui.QFont('Lucida Grande', (9/24) * TileWidth)
-    else:
-        NumberFont = QtGui.QFont('Sans', (8/24) * TileWidth)
-
-def SetDirty(noautosave=False):
-    global Dirty, DirtyOverride, AutoSaveDirty
-    if DirtyOverride > 0: return
-
-    if not noautosave: AutoSaveDirty = True
-    if Dirty: return
-
-    Dirty = True
-    try:
-        mainWindow.UpdateTitle()
-    except Exception:
-        pass
-
-
-def MapPositionToZoneID(zones, x, y, useid=False):
-    """
-    Returns the zone ID containing or nearest the specified position
-    """
-    id = 0
-    minimumdist = -1
-    rval = -1
-
-    for zone in zones:
-        r = zone.ZoneRect
-        if   r.contains(x,y) and     useid: return zone.id
-        elif r.contains(x,y) and not useid: return id
-
-        xdist = 0
-        ydist = 0
-        if x <= r.left(): xdist = r.left() - x
-        if x >= r.right(): xdist = x - r.right()
-        if y <= r.top(): ydist = r.top() - y
-        if y >= r.bottom(): ydist = y - r.bottom()
-
-        dist = (xdist ** 2 + ydist ** 2) ** 0.5
-        if dist < minimumdist or minimumdist == -1:
-            minimumdist = dist
-            rval = zone.id
-
-        id += 1
-
-    return rval
-
-
-
-class Metadata():
-    """
-    Class for the new level metadata system
-    """
-    # This new system is much more useful and flexible than the old
-    # system, but is incompatible with older versions of Reggie.
-    # They will fail to understand the data, and skip it like it
-    # doesn't exist. The new system is written with forward-compatibility
-    # in mind. Thus, when newer versions of Reggie are created
-    # with new metadata values, they will be easily able to add to
-    # the existing ones. In addition, the metadata system is lossless,
-    # so unrecognized values will be preserved when you open and save.
-
-    # Type values:
-    # 0 = binary
-    # 1 = string
-    # 2+ = undefined as of now - future Reggies can use them
-    # Theoretical limit to type values is 4,294,967,296
-
-    def __init__(self, data=None):
+    # Category parser
+    def ParseCategory(items):
         """
-        Creates a metadata object with the data given
+        Parses a list of strings and returns a tuple of strings
         """
-        self.DataDict = {}
-        if data is None: return
+        result = []
+        for item in items:
+            if isinstance(item[1], str):
+                # It's a tileset
+                name = item[1]
+                file = item[0]
+                result.append((file, name))
+            else:
+                # It's a category
+                childStrings = ParseCategory(item[1])
+                for child in childStrings:
+                    result.append(child)
+        return result
 
-        if data[0:4] != b'MD2_':
-            # This is old-style metadata - convert it
-            try:
-                strdata = ''
-                for d in data: strdata += chr(d)
-                level_info = pickle.loads(strdata)
-                for k, v in level_info.iteritems():
-                    self.setStrData(k, v)
-            except Exception: pass
-            if ('Website' not in self.DataDict) and ('Webpage' in self.DataDict):
-                self.DataDict['Website'] = self.DataDict['Webpage']
-            return
+    pa0 = sorted(ParseCategory(TilesetNames[0][0]), key=lambda entry: entry[1])
+    pa1 = sorted(ParseCategory(TilesetNames[1][0]), key=lambda entry: entry[1])
+    pa2 = sorted(ParseCategory(TilesetNames[2][0]), key=lambda entry: entry[1])
+    pa3 = sorted(ParseCategory(TilesetNames[3][0]), key=lambda entry: entry[1])
+    return (pa0, pa1, pa2, pa3)
 
-        # Iterate through the data
-        idx = 4
-        while idx < len(data) - 4:
-
-            # Read the next (first) four bytes - the key length
-            rawKeyLen = data[idx:idx+4]
-            idx += 4
-
-            keyLen = (rawKeyLen[0] << 24) | (rawKeyLen[1] << 16) | (rawKeyLen[2] << 8) | rawKeyLen[3]
-
-            # Read the next (key length) bytes - the key (as a str)
-            rawKey = data[idx:idx+keyLen]
-            idx += keyLen
-
-            key = ''
-            for b in rawKey: key += chr(b)
-
-            # Read the next four bytes - the number of type entries
-            rawTypeEntries = data[idx:idx+4]
-            idx += 4
-
-            typeEntries = (rawTypeEntries[0] << 24) | (rawTypeEntries[1] << 16) | (rawTypeEntries[2] << 8) | rawTypeEntries[3]
-
-            # Iterate through each type entry
-            typeData = {}
-            for entry in range(typeEntries):
-
-                # Read the next four bytes - the type
-                rawType = data[idx:idx+4]
-                idx += 4
-
-                type = (rawType[0] << 24) | (rawType[1] << 16) | (rawType[2] << 8) | rawType[3]
-
-                # Read the next four bytes - the data length
-                rawDataLen = data[idx:idx+4]
-                idx += 4
-
-                dataLen = (rawDataLen[0] << 24) | (rawDataLen[1] << 16) | (rawDataLen[2] << 8) | rawDataLen[3]
-
-                # Read the next (data length) bytes - the data (as bytes)
-                entryData = data[idx:idx+dataLen]
-                idx += dataLen
-
-                # Add it to typeData
-                self.setOtherData(key, type, entryData)
-
-
-    def binData(self, key):
-        """
-        Returns the binary data associated with key
-        """
-        return self.otherData(key, 0)
-
-    def strData(self, key):
-        """
-        Returns the string data associated with key
-        """
-        data = self.otherData(key, 1)
-        if data is None: return
-        s = ''
-        for d in data: s += chr(d)
-        return s
-
-    def otherData(self, key, type):
-        """
-        Returns unknown data, with the given type value, associated with key (as binary data)
-        """
-        if key not in self.DataDict: return
-        if type not in self.DataDict[key]: return
-        return self.DataDict[key][type]
-
-    def setBinData(self, key, value):
-        """
-        Sets binary data, overwriting any existing binary data with that key
-        """
-        self.setOtherData(key, 0, value)
-
-    def setStrData(self, key, value):
-        """
-        Sets string data, overwriting any existing string data with that key
-        """
-        data = []
-        for char in value: data.append(ord(char))
-        self.setOtherData(key, 1, data)
-
-    def setOtherData(self, key, type, value):
-        """
-        Sets other (binary) data, overwriting any existing data with that key and type
-        """
-        if key not in self.DataDict: self.DataDict[key] = {}
-        self.DataDict[key][type] = value
-
-    def save(self):
-        """
-        Returns a bytes object that can later be loaded from
-        """
-
-        # Sort self.DataDict
-        dataDictSorted = []
-        for dataKey in self.DataDict: dataDictSorted.append((dataKey, self.DataDict[dataKey]))
-        dataDictSorted.sort(key=lambda entry: entry[0])
-
-        data = []
-
-        # Add 'MD2_'
-        data.append(ord('M'))
-        data.append(ord('D'))
-        data.append(ord('2'))
-        data.append(ord('_'))
-
-        # Iterate through self.DataDict
-        for dataKey, types in dataDictSorted:
-
-            # Add the key length (4 bytes)
-            keyLen = len(dataKey)
-            data.append(keyLen >> 24)
-            data.append((keyLen >> 16) & 0xFF)
-            data.append((keyLen >> 8) & 0xFF)
-            data.append(keyLen & 0xFF)
-
-            # Add the key (key length bytes)
-            for char in dataKey: data.append(ord(char))
-
-            # Sort the types
-            typesSorted = []
-            for type in types: typesSorted.append((type, types[type]))
-            typesSorted.sort(key=lambda entry: entry[0])
-
-            # Add the number of types (4 bytes)
-            typeNum = len(typesSorted)
-            data.append(typeNum >> 24)
-            data.append((typeNum >> 16) & 0xFF)
-            data.append((typeNum >> 8) & 0xFF)
-            data.append(typeNum & 0xFF)
-
-            # Iterate through typesSorted
-            for type, typeData in typesSorted:
-
-                # Add the type (4 bytes)
-                data.append(type >> 24)
-                data.append((type >> 16) & 0xFF)
-                data.append((type >> 8) & 0xFF)
-                data.append(type & 0xFF)
-
-                # Add the data length (4 bytes)
-                dataLen = len(typeData)
-                data.append(dataLen >> 24)
-                data.append((dataLen >> 16) & 0xFF)
-                data.append((dataLen >> 8) & 0xFF)
-                data.append(dataLen & 0xFF)
-
-                # Add the data (data length bytes)
-                for d in typeData: data.append(d)
-
-        return data
-
+#####################################################################
+############################### LEVEL ###############################
+#####################################################################
 
 class AbstractLevel():
     """
@@ -2829,12 +3889,9 @@ class Level_NSMBU(AbstractLevel):
         # Add all the other stuff, too
         for szsThingName in szsData:
             if szsThingName == 'levelname': continue
-            try:
-                spl = szsThingName.split('-')
-                int(spl[0])
-                int(spl[1])
-            except:
-                print('Filename was not formatted correctly, but we ignored it. Let\'s hope Reggie doesn\'t explode')
+            spl = szsThingName.split('-')
+            int(spl[0])
+            int(spl[1])
             outerArchive.addFile(SarcLib.File(szsThingName, szsData[szsThingName]))
 
         # Save the outer sarc and return it
@@ -2851,6 +3908,9 @@ class Level_NSMBU(AbstractLevel):
 
         return new
 
+#####################################################################
+############################### AREAS ###############################
+#####################################################################
 
 class AbstractArea():
     """
@@ -2876,7 +3936,7 @@ class AbstractArea():
 class AbstractParsedArea(AbstractArea):
     """
     An area that is parsed to load sprites, entrances, etc. Still abstracted among games.
-    Don't instantiate this! It could blow up becuase many of the functions are only defined
+    Don't instantiate this! It could blow up because many of the functions are only defined
     within subclasses. If you want an area object, use a game-specific subclass.
     """
     def __init__(self):
@@ -3618,6 +4678,58 @@ class ListWidgetItem_SortsByOther(QtWidgets.QListWidgetItem):
     def __lt__(self, other):
         return self.reference < other.reference
 
+#####################################################################
+############################ BACKGROUNDS ############################
+#####################################################################
+
+class AbstractBackground():
+    """
+    A class that represents an abstract background for a zone (both bgA and bgB)
+    """
+    def __init__(self, xScroll=1, yScroll=1, xPos=1, yPos=1):
+        self.xScroll = xScroll
+        self.yScroll = yScroll
+        self.xPos = xPos
+        self.yPos = yPos
+
+    def save(idnum=0):
+        return b''
+
+
+class Background_NSMBU(AbstractBackground):
+    """
+    A class that represents a background from New Super Mario Bros. U
+    """
+    def __init__(self, xScroll=1, yScroll=1, xPos=1, yPos=1, name=''):
+        super().__init__(xScroll, yScroll, xPos, yPos)
+        self.name = name
+
+    def loadFrom(self, data):
+        if len(data) != 28:
+            raise ValueError('Wrong data length: must be 28 bytes exactly')
+
+        bgstruct = struct.Struct('>Hbbbbxx15sbxxxx')
+        bgvalues = bgstruct.unpack(data)
+        id = bgvalues[0]
+        self.xScroll = bgvalues[1]
+        self.yScroll = bgvalues[2]
+        self.xPos = bgvalues[3]
+        self.yPos = bgvalues[4]
+        self.name = bgvalues[5].split(b'\0')[0].decode('utf-8')
+        self.unk1 = bgvalues[6]
+
+        return id
+
+    def save(idnum=0):
+        bgstruct = struct.struct('>Hbbbbxx15sbxxxx')
+        return # not yet implemented properly; ignore the stuff below
+        settings = struct.pack('>Hbbbbxx', idnum, self.xScroll, self.yScroll, self.xPos, self.yPos)
+        name = self.name.encode('utf-8') + b'\0' * (20 - len(self.name))
+        return settings + name
+
+#####################################################################
+######################### LEVELEDITOR ITEMS #########################
+#####################################################################
 
 class LevelEditorItem(QtWidgets.QGraphicsItem):
     """
@@ -4042,59 +5154,6 @@ class ObjectItem(LevelEditorItem):
         """
         Area.RemoveFromLayer(self)
         self.scene().update(self.x(), self.y(), self.BoundingRect.width(), self.BoundingRect.height())
-
-
-class AbstractBackground():
-    """
-    A class that represents an abstract background for a zone (both bgA and bgB)
-    """
-    def __init__(self, xScroll=1, yScroll=1, xPos=1, yPos=1):
-        self.xScroll = xScroll
-        self.yScroll = yScroll
-        self.xPos = xPos
-        self.yPos = yPos
-
-    def save(idnum=0):
-        return b''
-
-
-class Background_NSMBW(AbstractBackground):
-    """
-    A class that represents a background from New Super Mario Bros. Wii
-    """
-    pass # not yet implemented
-
-
-class Background_NSMBU(AbstractBackground):
-    """
-    A class that represents a background from New Super Mario Bros. U
-    """
-    def __init__(self, xScroll=1, yScroll=1, xPos=1, yPos=1, name=''):
-        super().__init__(xScroll, yScroll, xPos, yPos)
-        self.name = name
-
-    def loadFrom(self, data):
-        if len(data) != 28:
-            raise ValueError('Wrong data length: must be 28 bytes exactly')
-
-        bgstruct = struct.Struct('>Hbbbbxx15sbxxxx')
-        bgvalues = bgstruct.unpack(data)
-        id = bgvalues[0]
-        self.xScroll = bgvalues[1]
-        self.yScroll = bgvalues[2]
-        self.xPos = bgvalues[3]
-        self.yPos = bgvalues[4]
-        self.name = bgvalues[5].split(b'\0')[0].decode('utf-8')
-        self.unk1 = bgvalues[6]
-
-        return id
-
-    def save(idnum=0):
-        bgstruct = struct.struct('>Hbbbbxx15sbxxxx')
-        return # not yet implemented properly; ignore the stuff below
-        settings = struct.pack('>Hbbbbxx', idnum, self.xScroll, self.yScroll, self.xPos, self.yPos)
-        name = self.name.encode('utf-8') + b'\0' * (20 - len(self.name))
-        return settings + name
 
 
 class ZoneItem(LevelEditorItem):
@@ -4539,8 +5598,6 @@ class LocationItem(LevelEditorItem):
         loclist.selectionModel().clearSelection()
         Area.locations.remove(self)
         self.scene().update(self.x(), self.y(), self.BoundingRect.width(), self.BoundingRect.height())
-
-
 
 
 class SpriteItem(LevelEditorItem):
@@ -5518,7 +6575,6 @@ class PathItem(LevelEditorItem):
         self.scene().update(self.x(), self.y(), self.BoundingRect.width(), self.BoundingRect.height())
 
 
-
 class PathEditorLineItem(LevelEditorItem):
     """
     Level editor item to draw a line between two path nodes
@@ -5617,6 +6673,7 @@ class PathEditorLineItem(LevelEditorItem):
         Delete the line from the level
         """
         self.scene().update()
+
 
 class CommentItem(LevelEditorItem):
     """
@@ -5787,8 +6844,9 @@ class CommentItem(LevelEditorItem):
         self.scene().update(self.x(), self.y(), self.BoundingRect.width(), self.BoundingRect.height())
         mainWindow.SaveComments()
 
-
-
+#####################################################################
+############################## WIDGETS ##############################
+#####################################################################
 
 class LevelOverviewWidget(QtWidgets.QWidget):
     """
@@ -5966,8 +7024,6 @@ class LevelOverviewWidget(QtWidgets.QWidget):
         if self.scale < 0.002: self.scale = 0.002
 
         self.CalcSize()
-
-
 
 
 class ObjectPickerWidget(QtWidgets.QListView):
@@ -6280,285 +7336,6 @@ class StampChooserWidget(QtWidgets.QListView):
         val = super().selectionChanged(selected, deselected)
         self.selectionChangedSignal.emit()
         return val
-
-
-class StampListModel(QtCore.QAbstractListModel):
-    """
-    Model containing all the stamps
-    """
-
-    def __init__(self):
-        """
-        Initializes the model
-        """
-        QtCore.QAbstractListModel.__init__(self)
-
-        self.items = [] # list of Stamp objects
-
-    def rowCount(self, parent=None):
-        """
-        Required by Qt
-        """
-        return len(self.items)
-
-    def data(self, index, role=Qt.DisplayRole):
-        """
-        Get what we have for a specific row
-        """
-        if not index.isValid(): return None
-        n = index.row()
-        if n < 0: return None
-        if n >= len(self.items): return None
-
-        if role == Qt.DecorationRole:
-            return self.items[n].Icon
-
-        elif role == Qt.BackgroundRole:
-            return QtGui.qApp.palette().base()
-
-        elif role == Qt.UserRole:
-            return self.items[n].Name
-
-        elif role == Qt.StatusTipRole:
-            return self.items[n].Name
-
-        else: return None
-
-    def setData(self, index, value, role=Qt.DisplayRole):
-        """
-        Set data for a specific row
-        """
-        if not index.isValid(): return None
-        n = index.row()
-        if n < 0: return None
-        if n >= len(self.items): return None
-
-        if role == Qt.UserRole:
-            self.items[n].Name = value
-
-    def addStamp(self, stamp):
-        """
-        Adds a stamp
-        """
-
-        # Start resetting
-        self.beginResetModel()
-
-        # Add the stamp to self.items
-        self.items.append(stamp)
-
-        # Finish resetting
-        self.endResetModel()
-
-    def removeStamp(self, stamp):
-        """
-        Removes a stamp
-        """
-
-        # Start resetting
-        self.beginResetModel()
-
-        # Remove the stamp from self.items
-        idx = self.items.index(stamp)
-        self.items.remove(stamp)
-
-        # Finish resetting
-        self.endResetModel()
-
-
-class Stamp():
-    """
-    Class that represents a stamp in the list
-    """
-    def __init__(self, ReggieClip=None, Name=''):
-        """
-        Initializes the stamp
-        """
-
-        self.ReggieClip = ReggieClip
-        self.Name = Name
-        self.Icon = self.render()
-
-    def renderPreview(self):
-        """
-        Renders the stamp preview
-        """
-
-        minX, minY, maxX, maxY = 24576, 12288, 0, 0
-
-        layers, sprites = mainWindow.getEncodedObjects(self.ReggieClip)
-
-        # Go through the sprites and find the maxs and mins
-        for spr in sprites:
-
-            br = spr.getFullRect()
-
-            x1 = br.topLeft().x()
-            y1 = br.topLeft().y()
-            x2 = x1 + br.width()
-            y2 = y1 + br.height()
-
-            if x1 < minX: minX = x1
-            if x2 > maxX: maxX = x2
-            if y1 < minY: minY = y1
-            if y2 > maxY: maxY = y2
-
-        # Go through the objects and find the maxs and mins
-        for layer in layers:
-            for obj in layer:
-                x1 = (obj.objx * TileWidth)
-                x2 = x1 + (obj.width * TileWidth)
-                y1 = (obj.objy * TileWidth)
-                y2 = y1 + (obj.height * TileWidth)
-
-                if x1 < minX: minX = x1
-                if x2 > maxX: maxX = x2
-                if y1 < minY: minY = y1
-                if y2 > maxY: maxY = y2
-
-        # Calculate offset amounts (snap to TileWidthxTileWidth increments)
-        offsetX = int(minX // TileWidth) * TileWidth
-        offsetY = int(minY // TileWidth) * TileWidth
-        drawOffsetX = offsetX - minX
-        drawOffsetY = offsetY - minY
-
-        # Go through the things again and shift them by the offset amount
-        for spr in sprites:
-            spr.objx -= offsetX / TileWidth / 16
-            spr.objy -= offsetY / TileWidth / 16
-        for layer in layers:
-            for obj in layer:
-                obj.objx -= offsetX // TileWidth
-                obj.objy -= offsetY // TileWidth
-
-        # Calculate the required pixmap size
-        pixmapSize = (maxX - minX, maxY - minY)
-
-        # Create the pixmap, and a painter
-        pix = QtGui.QPixmap(pixmapSize[0], pixmapSize[1])
-        pix.fill(Qt.transparent)
-        painter = QtGui.QPainter(pix)
-        painter.setRenderHint(painter.Antialiasing)
-
-        # Paint all objects
-        objw, objh = int(pixmapSize[0] // TileWidth) + 1, int(pixmapSize[1] // TileWidth) + 1
-        for layer in reversed(layers):
-            tmap = []
-            for i in range(objh):
-                tmap.append([-1] * objw)
-            for obj in layer:
-                startx = int(obj.objx)
-                starty = int(obj.objy)
-
-                desty = starty
-                for row in obj.objdata:
-                    destrow = tmap[desty]
-                    destx = startx
-                    for tile in row:
-                        if tile > 0:
-                            destrow[destx] = tile
-                        destx += 1
-                    desty += 1
-
-                painter.save()
-                desty = 0
-                for row in tmap:
-                    destx = 0
-                    for tile in row:
-                        if tile > 0:
-                            if Tiles[tile] is None: continue
-                            r = Tiles[tile].main
-                            if r is None: continue
-                            painter.drawPixmap(destx + drawOffsetX, desty + drawOffsetY, r)
-                        destx += TileWidth
-                    desty += TileWidth
-                painter.restore()
-
-        # Paint all sprites
-        for spr in sprites:
-            offx = ((spr.objx + spr.ImageObj.xOffset) * TileWidth / 16) + drawOffsetX
-            offy = ((spr.objy + spr.ImageObj.yOffset) * TileWidth / 16) + drawOffsetY
-
-            painter.save()
-            painter.translate(offx, offy)
-
-            spr.paint(painter, None, None, True)
-
-            painter.restore()
-
-            # Paint any auxiliary things
-            for aux in spr.ImageObj.aux:
-                painter.save()
-                painter.translate(
-                    offx + aux.x(),
-                    offy + aux.y(),
-                    )
-
-                aux.paint(painter, None, None)
-
-                painter.restore()
-
-        # End painting
-        painter.end()
-        del painter
-
-        # Scale it
-        maxW, maxH = 96, 96
-        w, h = pix.width(), pix.height()
-        if w > h and w > maxW:
-            pix = pix.scaledToWidth(maxW)
-        elif h > w and h > maxH:
-            pix = pix.scaledToHeight(maxH)
-
-        # Return it
-        return pix
-
-    def render(self):
-        """
-        Renders the stamp icon, preview AND text
-        """
-
-        # Get the preview icon
-        prevIcon = self.renderPreview()
-
-        # Calculate the total size of the icon
-        textSize = self.calculateTextSize(self.Name)
-        totalWidth = max(prevIcon.width(), textSize.width())
-        totalHeight = prevIcon.height() + 2 + textSize.height()
-
-        # Make a pixmap and painter
-        pix = QtGui.QPixmap(totalWidth, totalHeight)
-        pix.fill(Qt.transparent)
-        painter = QtGui.QPainter(pix)
-
-        # Draw the preview
-        iconWidth = prevIcon.width()
-        iconXOffset = (totalWidth - prevIcon.width()) / 2
-        painter.drawPixmap(iconXOffset, 0, prevIcon)
-
-        # Draw the text
-        textRect = QtCore.QRectF(0, prevIcon.height() + 2, totalWidth, textSize.height())
-        painter.setFont(QtGui.QFont())
-        painter.drawText(textRect, Qt.AlignTop | Qt.TextWordWrap, self.Name)
-
-        # Return the pixmap
-        return pix
-
-    @staticmethod
-    def calculateTextSize(text):
-        """
-        Calculates the size of text. Crops to 96 pixels wide.
-        """
-        fontMetrics = QtGui.QFontMetrics(QtGui.QFont())
-        fontRect = fontMetrics.boundingRect(QtCore.QRect(0, 0, 96, 48), Qt.TextWordWrap, text)
-        w, h = fontRect.width(), fontRect.height()
-        return QtCore.QSizeF(min(w, 96), h)
-
-    def update(self):
-        """
-        Updates the stamp icon
-        """
-        self.Icon = self.render()
 
 
 class SpritePickerWidget(QtWidgets.QTreeWidget):
@@ -7193,8 +7970,6 @@ class SpriteEditorWidget(QtWidgets.QWidget):
             self.raweditor.setStyleSheet('QLineEdit { background-color: #ffd2d2; }')
 
 
-
-
 class EntranceEditorWidget(QtWidgets.QWidget):
     """
     Widget for editing entrance properties
@@ -7631,6 +8406,7 @@ class PathNodeEditorWidget(QtWidgets.QWidget):
         self.path.pathinfo['peline'].loops = (i == Qt.Checked)
         mainWindow.scene.update()
         
+
 class IslandGeneratorWidget(QtWidgets.QWidget):
     """
     Widget for editing entrance properties
@@ -7924,7 +8700,6 @@ class IslandGeneratorWidget(QtWidgets.QWidget):
         mainWindow.placeEncodedObjects(retcb)
 
 
-
 class LocationEditorWidget(QtWidgets.QWidget):
     """
     Widget for editing location properties
@@ -8130,799 +8905,383 @@ class LocationEditorWidget(QtWidgets.QWidget):
         self.setLocation(loc) # updates the fields
 
 
+class LoadingTab(QtWidgets.QWidget):
+    def __init__(self):
+        QtWidgets.QWidget.__init__(self)
 
-def LoadTheme():
-    """
-    Loads the theme
-    """
-    global theme
+        self.unk1 = QtWidgets.QSpinBox()
+        self.unk1.setRange(0, 0x255)
+        self.unk1.setToolTip(trans.string('AreaDlg', 25))
+        self.unk1.setValue(Area.unk1)
+        
+        self.unk2 = QtWidgets.QSpinBox()
+        self.unk2.setRange(0, 255)
+        self.unk2.setToolTip(trans.string('AreaDlg', 25))
+        self.unk2.setValue(Area.unk2)
 
-    id = setting('Theme')
-    if id is None: id = 'Classic'
-    if id != 'Classic':
+        self.wrap = QtWidgets.QCheckBox(trans.string('AreaDlg', 7))
+        self.wrap.setToolTip(trans.string('AreaDlg', 8))
+        self.wrap.setChecked((Area.wrapFlag & 1) != 0)        
 
-        path = str('reggiedata\\themes\\'+id).replace('\\', '/')
-        with open(path, 'rb') as f:
-            theme = ReggieTheme(f)
+        self.timer = QtWidgets.QSpinBox()
+        self.timer.setRange(0, 999)
+        self.timer.setToolTip(trans.string('AreaDlg', 4))
+        self.timer.setValue(Area.timeLimit + 100)
 
-    else: theme = ReggieTheme()
+        self.timelimit2 = QtWidgets.QSpinBox()
+        self.timelimit2.setRange(0, 999)
+        self.timelimit2.setToolTip(trans.string('AreaDlg', 38))
+        self.timelimit2.setValue(Area.timelimit2)
+
+        self.timelimit3 = QtWidgets.QSpinBox()
+        self.timelimit3.setRange(0, 999)
+        self.timelimit3.setToolTip(trans.string('AreaDlg', 38))
+        self.timelimit3.setValue(Area.timelimit3)           
+        
+        self.unk3 = QtWidgets.QSpinBox()
+        self.unk3.setRange(0, 999)
+        self.unk3.setToolTip(trans.string('AreaDlg', 26))
+        self.unk3.setValue(Area.unk3)
+
+        self.unk4 = QtWidgets.QSpinBox()
+        self.unk4.setRange(0, 999)
+        self.unk4.setToolTip(trans.string('AreaDlg', 26))
+        self.unk4.setValue(Area.unk4)
+
+        self.unk5 = QtWidgets.QSpinBox()
+        self.unk5.setRange(0, 999)
+        self.unk5.setToolTip(trans.string('AreaDlg', 26))
+        self.unk5.setValue(Area.unk5)
+
+        self.unk6 = QtWidgets.QSpinBox()
+        self.unk6.setRange(0, 999)
+        self.unk6.setToolTip(trans.string('AreaDlg', 26))
+        self.unk6.setValue(Area.unk6)
+
+        self.unk7 = QtWidgets.QSpinBox()
+        self.unk7.setRange(0, 999)
+        self.unk7.setToolTip(trans.string('AreaDlg', 26))
+        self.unk7.setValue(Area.unk7)     
+        
+        settingsLayout = QtWidgets.QFormLayout()
+        settingsLayout.addRow(trans.string('AreaDlg', 22), self.unk1)
+        settingsLayout.addRow(trans.string('AreaDlg', 23), self.unk2)
+        settingsLayout.addRow(trans.string('AreaDlg', 3), self.timer)
+        settingsLayout.addRow(trans.string('AreaDlg', 36), self.timelimit2)
+        settingsLayout.addRow(trans.string('AreaDlg', 37), self.timelimit3) 
+        settingsLayout.addRow(trans.string('AreaDlg', 24), self.unk3)        
+        settingsLayout.addRow(trans.string('AreaDlg', 32), self.unk4)
+        settingsLayout.addRow(trans.string('AreaDlg', 33), self.unk5)
+        settingsLayout.addRow(trans.string('AreaDlg', 34), self.unk6)
+        settingsLayout.addRow(trans.string('AreaDlg', 35), self.unk7)       
+        settingsLayout.addRow(self.wrap)
+
+        Layout = QtWidgets.QVBoxLayout()
+        Layout.addLayout(settingsLayout)
+        Layout.addStretch(1)
+        self.setLayout(Layout)
 
 
-class ReggieTheme():
-    """
-    Class that represents a Reggie theme
-    """
-    def __init__(self, file=None):
+class TilesetsTab(QtWidgets.QWidget):
+    def __init__(self):
+        QtWidgets.QWidget.__init__(self)
+        self.setMinimumWidth(384)
+
+        # Set up each tileset
+        self.widgets = []
+        self.trees = []
+        self.lineEdits = []
+        self.itemDict = [{}, {}, {}, {}]
+        self.noneItems = []
+
+        for slot in range(4):
+            # Create the main widget
+            widget = QtWidgets.QWidget()
+            self.widgets.append(widget)
+
+            # Create the tree widget
+            tree = QtWidgets.QTreeWidget()
+            tree.setColumnCount(2)
+            tree.setHeaderLabels([trans.string('AreaDlg', 28), trans.string('AreaDlg', 29)]) # ['Name', 'File']
+            tree.setIndentation(16)
+            if slot == 0: handler = self.handleTreeSel0
+            elif slot == 1: handler = self.handleTreeSel1
+            elif slot == 2: handler = self.handleTreeSel2
+            else: handler = self.handleTreeSel3
+            tree.itemSelectionChanged.connect(handler)
+            self.trees.append(tree)
+
+            # Add "None" entry
+            item = QtWidgets.QTreeWidgetItem()
+            item.setText(0, trans.string('AreaDlg', 15)) # 'None'
+            tree.addTopLevelItem(item)
+            self.noneItems.append(item)
+
+            # Keep an unsorted list for the textbox autocomplete
+            tilesetList = []
+
+            # Add entries for each tileset
+            def ParseCategory(items):
+                """
+                Parses a list of strings and returns a tuple of QTreeWidgetItem's
+                """
+                nodes = []
+                for item in items:
+                    node = QtWidgets.QTreeWidgetItem()
+
+                    # Check if it's a tileset or a category
+                    if isinstance(item[1], str):
+                        # It's a tileset
+                        node.setText(0, item[1])
+                        node.setText(1, item[0])
+                        node.setToolTip(0, item[1])
+                        node.setToolTip(1, item[0])
+                        self.itemDict[slot][item[0]] = node
+                        tilesetList.append(item[0])
+                    else:
+                        # It's a category
+                        node.setText(0, item[0])
+                        node.setToolTip(0, item[0])
+                        node.setFlags(Qt.ItemIsEnabled)
+                        children = ParseCategory(item[1])
+                        for cnode in children:
+                            node.addChild(cnode)
+                    nodes.append(node)
+                return tuple(nodes)
+            categories = ParseCategory(TilesetNames[slot][0])
+            tree.addTopLevelItems(categories)
+
+            # Create the line edit
+            line = QtWidgets.QLineEdit()
+            line.textChanged.connect(eval('self.handleTextEdit%d' % slot))
+            line.setCompleter(QtWidgets.QCompleter(tilesetList))
+            line.setPlaceholderText(trans.string('AreaDlg', 30)) # '(None)'
+            self.lineEdits.append(line)
+            line.setText(eval('Area.tileset%d' % slot))
+            self.handleTextEdit(slot)
+            # Above line: For some reason, PyQt doesn't automatically call
+            # the handler if (Area.tileset%d % slot) == ''
+
+            # Create the layout and add it to the widget
+            L = QtWidgets.QGridLayout()
+            L.addWidget(tree, 0, 0, 1, 2)
+            L.addWidget(QtWidgets.QLabel(trans.string('AreaDlg', 31, '[slot]', slot)), 1, 0) # 'Tilesets (Pa[slot])'
+            L.addWidget(line, 1, 1)
+            L.setRowStretch(0, 1)
+            widget.setLayout(L)
+
+        # Set up the tab widget
+        T = QtWidgets.QTabWidget()
+        T.setTabPosition(T.West)
+        T.setUsesScrollButtons(False)
+        T.addTab(self.widgets[0], trans.string('AreaDlg', 11)) # 'Standard Suite'
+        T.addTab(self.widgets[1], trans.string('AreaDlg', 12)) # 'Stage Suite'
+        T.addTab(self.widgets[2], trans.string('AreaDlg', 13)) # 'Background Suite'
+        T.addTab(self.widgets[3], trans.string('AreaDlg', 14)) # 'Interactive Suite'
+        L = QtWidgets.QVBoxLayout()
+        L.addWidget(T)
+        self.setLayout(L)
+        return
+
+    # Tree handlers
+    def handleTreeSel0(self):
+        self.handleTreeSel(0)
+    def handleTreeSel1(self):
+        self.handleTreeSel(1)
+    def handleTreeSel2(self):
+        self.handleTreeSel(2)
+    def handleTreeSel3(self):
+        self.handleTreeSel(3)
+    def handleTreeSel(self, slot):
         """
-        Initializes the theme
+        Handles changes to the selections in all tree widgets
         """
-        self.initAsClassic()
-        if file is not None: self.initFromFile(file)
+        selItems = self.trees[slot].selectedItems()
+        if len(selItems) != 1: return
+        item = selItems[0]
 
+        value = str(item.text(1))
+        self.lineEdits[slot].setText(value)
 
-    def initAsClassic(self):
+    # Line-edit handlers
+    def handleTextEdit0(self):
+        self.handleTextEdit(0)
+    def handleTextEdit1(self):
+        self.handleTextEdit(1)
+    def handleTextEdit2(self):
+        self.handleTextEdit(2)
+    def handleTextEdit3(self):
+        self.handleTextEdit(3)
+    def handleTextEdit(self, slot):
         """
-        Initializes the theme as the hardcoded Classic theme
+        Handles changes made to the line-edit widgets
         """
-        self.fileName = 'Classic'
-        self.formatver = 1.0
-        self.version = 1.0
-        self.themeName = trans.string('Themes', 0)
-        self.creator = trans.string('Themes', 1)
-        self.description = trans.string('Themes', 2)
-        self.iconCacheSm = {}
-        self.iconCacheLg = {}
-        self.style = None
+        self.trees[slot].clearSelection()
+        txt = str(self.lineEdits[slot].text())
 
-        # Add the colors                                               # Descriptions:
-        self.colors = {
-            'bg':                      QtGui.QColor(119,136,153),     # Main scene background fill
-            'comment_fill':            QtGui.QColor(220,212,135,120), # Unselected comment fill
-            'comment_fill_s':          QtGui.QColor(254,240,240,240), # Selected comment fill
-            'comment_lines':           QtGui.QColor(192,192,192,120), # Unselected comment lines
-            'comment_lines_s':         QtGui.QColor(220,212,135,240), # Selected comment lines
-            'depth_highlight':         QtGui.QColor(243,243,21,191),  # Tileset 3D effect highlight (NSMBU)
-            'entrance_fill':           QtGui.QColor(190,0,0,120),     # Unselected entrance fill
-            'entrance_fill_s':         QtGui.QColor(190,0,0,240),     # Selected entrance fill
-            'entrance_lines':          QtGui.QColor(0,0,0),           # Unselected entrance lines
-            'entrance_lines_s':        QtGui.QColor(255,255,255),     # Selected entrance lines
-            'grid':                    QtGui.QColor(255,255,255,100), # Grid
-            'location_fill':           QtGui.QColor(114,42,188,70),   # Unselected location fill
-            'location_fill_s':         QtGui.QColor(170,128,215,100), # Selected location fill
-            'location_lines':          QtGui.QColor(0,0,0),           # Unselected location lines
-            'location_lines_s':        QtGui.QColor(255,255,255),     # Selected location lines
-            'location_text':           QtGui.QColor(255,255,255),     # Location text
-            'object_fill_s':           QtGui.QColor(255,255,255,64),  # Select object fill
-            'object_lines_s':          QtGui.QColor(255,255,255),     # Selected object lines
-            'overview_entrance':       QtGui.QColor(255,0,0),         # Overview entrance fill
-            'overview_location_fill':  QtGui.QColor(114,42,188,50),   # Overview location fill
-            'overview_location_lines': QtGui.QColor(0,0,0),           # Overview location lines
-            'overview_object':         QtGui.QColor(255,255,255),     # Overview object fill
-            'overview_sprite':         QtGui.QColor(0,92,196),        # Overview sprite fill
-            'overview_viewbox':        QtGui.QColor(0,0,255),         # Overview background fill
-            'overview_zone_fill':      QtGui.QColor(47,79,79,120),    # Overview zone fill
-            'overview_zone_lines':     QtGui.QColor(0,255,255),       # Overview zone lines
-            'path_connector':          QtGui.QColor(6,249,20),        # Path node connecting lines
-            'path_fill':               QtGui.QColor(6,249,20,120),    # Unselected path node fill
-            'path_fill_s':             QtGui.QColor(6,249,20,240),    # Selected path node fill
-            'path_lines':              QtGui.QColor(0,0,0),           # Unselected path node lines
-            'path_lines_s':            QtGui.QColor(255,255,255),     # Selected path node lines
-            'smi':                     QtGui.QColor(255,255,255,80),  # Sprite movement indicator
-            'sprite_fill_s':           QtGui.QColor(255,255,255,64),  # Selected sprite w/ image fill
-            'sprite_lines_s':          QtGui.QColor(255,255,255),     # Selected sprite w/ image lines
-            'spritebox_fill':          QtGui.QColor(0,92,196,120),    # Unselected sprite w/o image fill
-            'spritebox_fill_s':        QtGui.QColor(0,92,196,240),    # Selected sprite w/o image fill
-            'spritebox_lines':         QtGui.QColor(0,0,0),           # Unselected sprite w/o image fill
-            'spritebox_lines_s':       QtGui.QColor(255,255,255),     # Selected sprite w/o image fill
-            'zone_entrance_helper':    QtGui.QColor(190,0,0,120),     # Zone entrance-placement left border indicator
-            'zone_lines':              QtGui.QColor(145,200,255,176), # Zone lines
-            'zone_corner':             QtGui.QColor(255,255,255),     # Zone grabbers/corners
-            'zone_dark_fill':          QtGui.QColor(0,0,0,48),        # Zone fill when dark
-            'zone_text':               QtGui.QColor(44,64,84),        # Zone text
-            }
+        if (txt in self.itemDict[slot]) or (txt == ''):
+            # Collapse all
+            for i in range(self.trees[slot].topLevelItemCount()):
+                self.trees[slot].collapseItem(self.trees[slot].topLevelItem(i))
 
-    def initFromFile(self, file):
+            # If there's no text, just select None
+            if txt == '':
+                self.noneItems[slot].setSelected(True)
+                return
+
+            # Find the item matching the description, and select it
+            item = self.itemDict[slot][txt]
+            item.setSelected(True)
+
+            # Expand all of its parents
+            parent = item.parent()
+            while parent is not None:
+                parent.setExpanded(True)
+                parent = parent.parent()
+
+    def values(self):
         """
-        Initializes the theme from the file
+        Returns all 4 tileset choices
         """
-        try:
-            zipf = zipfile.ZipFile(file, 'r')
-            zipfList = zipf.namelist()
-        except Exception:
-            # Can't load the data for some reason
-            return
-        try:
-            mainxmlfile = zipf.open('main.xml')
-        except KeyError:
-            # There's no main.xml in the file
-            return
-
-        # Create a XML ElementTree
-        try: maintree = etree.parse(mainxmlfile)
-        except Exception: return
-        root = maintree.getroot()
-
-        # Parse the attributes of the <theme> tag
-        if not self.parseMainXMLHead(root):
-            # The attributes are messed up
-            return
-
-        # Parse the other nodes
-        for node in root:
-            if node.tag.lower() == 'colors':
-                if 'file' not in node.attrib: continue
-
-                # Load the colors XML
-                try:
-                    self.loadColorsXml(zipf.open(node.attrib['file']))
-                except Exception: continue
-
-            elif node.tag.lower() == 'stylesheet':
-                if 'file' not in node.attrib: continue
-
-                # Load the stylesheet
-                try:
-                    self.loadStylesheet(zipf.open(node.attrib['file']))
-                except Exception: continue
-
-            elif node.tag.lower() == 'icons':
-                if not all(thing in node.attrib for thing in ['size', 'folder']): continue
-
-                foldername = node.attrib['folder']
-                big = node.attrib['size'].lower()[:2] == 'lg'
-                cache = self.iconCacheLg if big else self.iconCacheSm
-
-                # Load the icons
-                for iconfilename in zipfList:
-                    iconname = iconfilename
-                    if not iconname.startswith(foldername + '/'): continue
-                    iconname = iconname[len(foldername)+1:]
-                    if len(iconname) <= len('icon-.png'): continue
-                    if not iconname.startswith('icon-') or not iconname.endswith('.png'): continue
-                    iconname = iconname[len('icon-'): -len('.png')]
-
-                    icodata = zipf.open(iconfilename).read()
-                    pix = QtGui.QPixmap()
-                    if not pix.loadFromData(icodata): continue
-                    ico = QtGui.QIcon(pix)
-
-                    cache[iconname] = ico
-
-    def parseMainXMLHead(self, root):
-        """
-        Parses the main attributes of main.xml
-        """
-        MaxSupportedXMLVersion = 1.0
-
-        # Check for required attributes
-        if root.tag.lower() != 'theme': return False
-        if 'format' in root.attrib:
-            formatver = root.attrib['format']
-            try: self.formatver = float(formatver)
-            except ValueError: return False
-        else: return False
-
-        if self.formatver > MaxSupportedXMLVersion: return False
-        if 'name' in root.attrib: self.themeName = root.attrib['name']
-        else: return False
-
-        # Check for optional attributes
-        self.creator = trans.string('Themes', 3)
-        self.description = trans.string('Themes', 4)
-        self.style = None
-        self.version = 1.0
-        if 'creator'     in root.attrib: self.creator = root.attrib['creator']
-        if 'description' in root.attrib: self.description = root.attrib['description']
-        if 'style'       in root.attrib: self.style = root.attrib['style']
-        if 'version'     in root.attrib:
-            try: self.version = float(root.attrib['style'])
-            except ValueError: pass
-
-        return True
-
-    def loadColorsXml(self, file):
-        """
-        Loads a colors.xml file
-        """
-        try: tree = etree.parse(file)
-        except Exception: return
-
-        root = tree.getroot()
-        if root.tag.lower() != 'colors': return False
-
-        colorDict = {}
-        for colorNode in root:
-            if colorNode.tag.lower() != 'color': continue
-            if not all(thing in colorNode.attrib for thing in ['id', 'value']): continue
-
-            colorval = colorNode.attrib['value']
-            if colorval.startswith('#'): colorval = colorval[1:]
-            a = 255
-            try:
-                if len(colorval) == 3:
-                    # RGB
-                    r = int(colorval[0], 16)
-                    g = int(colorval[1], 16)
-                    b = int(colorval[2], 16)
-                elif len(colorval) == 4:
-                    # RGBA
-                    r = int(colorval[0], 16)
-                    g = int(colorval[1], 16)
-                    b = int(colorval[2], 16)
-                    a = int(colorval[3], 16)
-                elif len(colorval) == 6:
-                    # RRGGBB
-                    r = int(colorval[0:2], 16)
-                    g = int(colorval[2:4], 16)
-                    b = int(colorval[4:6], 16)
-                elif len(colorval) == 8:
-                    # RRGGBBAA
-                    r = int(colorval[0:2], 16)
-                    g = int(colorval[2:4], 16)
-                    b = int(colorval[4:6], 16)
-                    a = int(colorval[6:8], 16)
-            except ValueError: continue
-            colorobj = QtGui.QColor(r, g, b, a)
-            colorDict[colorNode.attrib['id']] = colorobj
-
-        # Merge dictionaries
-        self.colors.update(colorDict)
-
-
-    def loadStylesheet(self, file):
-        """
-        Loads a stylesheet
-        """
-        print(file)
-
-    def color(self, name):
-        """
-        Returns a color
-        """
-        return self.colors[name]
-
-    def GetIcon(self, name, big=False):
-        """
-        Returns an icon
-        """
-
-        cache = self.iconCacheLg if big else self.iconCacheSm
-
-        if name not in cache:
-            path = 'reggiedata/ico/lg/icon-' if big else 'reggiedata/ico/sm/icon-'
-            path += name
-            cache[name] = QtGui.QIcon(path)
-
-        return cache[name]
-
-    def ui(self):
-        """
-        Returns the UI style
-        """
-        return self.uiStyle
-
-
-# Related function
-def toQColor(*args):
-    """
-    Usage: toQColor(r, g, b[, a]) OR toQColor((r, g, b[, a]))
-    """
-    if len(args) == 1: args = args[0]
-    r = args[0]
-    g = args[1]
-    b = args[2]
-    a = args[3] if len(args) == 4 else 255
-    return QtGui.QColor(r, g, b, a)
-
-
-
-
-
-# Game Definitions
-
-def LoadGameDef(name=None, dlg=None):
-    """
-    Loads a game definition
-    """
-    global gamedef
-    if dlg: dlg.setMaximum(7)
-
-    # Put the whole thing into a try-except clause
-    # to catch whatever errors may happen
-    try:
-
-        # Load the gamedef
-        if dlg: dlg.setLabelText(trans.string('Gamedefs', 1)) # Loading game patch...
-        gamedef = ReggieGameDefinition(name)
-        if gamedef.custom and (not settings.contains('GamePath_' + gamedef.name)):
-            # First-time usage of this gamedef. Have the
-            # user pick a stage folder so we can load stages
-            # and tilesets from there
-            QtWidgets.QMessageBox.information(None, trans.string('Gamedefs', 2), trans.string('Gamedefs', 3, '[game]', gamedef.name), QtWidgets.QMessageBox.Ok)
-            result = mainWindow.HandleChangeGamePath(True)
-            if result is not True: QtWidgets.QMessageBox.information(None, trans.string('Gamedefs', 4), trans.string('Gamedefs', 5, '[game]', gamedef.name), QtWidgets.QMessageBox.Ok)
-            else: QtWidgets.QMessageBox.information(None, trans.string('Gamedefs', 6), trans.string('Gamedefs', 7, '[game]', gamedef.name), QtWidgets.QMessageBox.Ok)
-        if dlg: dlg.setValue(1)
-
-        # Load spritedata.xml and spritecategories.xml
-        if dlg: dlg.setLabelText(trans.string('Gamedefs', 8)) # Loading sprite data...
-        LoadSpriteData()
-        LoadSpriteListData(True)
-        LoadSpriteCategories(True)
-        if mainWindow:
-            mainWindow.spriteViewPicker.clear()
-            for cat in SpriteCategories:
-                mainWindow.spriteViewPicker.addItem(cat[0])
-            mainWindow.sprPicker.LoadItems() # Reloads the sprite picker list items
-            mainWindow.spriteViewPicker.setCurrentIndex(0) # Sets the sprite picker to category 0 (enemies)
-            mainWindow.spriteDataEditor.setSprite(mainWindow.spriteDataEditor.spritetype, True) # Reloads the sprite data editor fields
-            mainWindow.spriteDataEditor.update()
-        if dlg: dlg.setValue(2)
-
-        # Reload tilesets
-        if dlg: dlg.setLabelText(trans.string('Gamedefs', 10)) # Reloading tilesets...
-        LoadObjDescriptions(True) # reloads ts1_descriptions
-        if mainWindow is not None: mainWindow.ReloadTilesets(True)
-        LoadTilesetNames(True) # reloads tileset names
-        if dlg: dlg.setValue(4)
-
-        # Load sprites.py
-        if dlg: dlg.setLabelText(trans.string('Gamedefs', 11)) # Loading sprite image data...
-        if Area is not None:
-            SLib.SpritesFolders = gamedef.recursiveFiles('sprites', False, True)
-
-            SLib.ImageCache.clear()
-            SLib.SpriteImagesLoaded.clear()
-            SLib.LoadBasicSuite()
-
-            spriteClasses = gamedef.getImageClasses()
-
-            for s in Area.sprites:
-                if s.type in SLib.SpriteImagesLoaded: continue
-                if s.type not in spriteClasses: continue
-
-                spriteClasses[s.type].loadImages()
-
-                SLib.SpriteImagesLoaded.add(s.type)
-
-            for s in Area.sprites:
-                if s.type in spriteClasses:
-                    s.setImageObj(spriteClasses[s.type])
-                else:
-                    s.setImageObj(SLib.SpriteImage)
-
-        if dlg: dlg.setValue(5)
-
-        # Reload the sprite-picker text
-        if dlg: dlg.setLabelText(trans.string('Gamedefs', 12)) # Applying sprite image data...
-        if Area is not None:
-            for spr in Area.sprites:
-                spr.UpdateListItem() # Reloads the sprite-picker text
-        if dlg: dlg.setValue(6)
-
-        # Load entrance names
-        if dlg: dlg.setLabelText(trans.string('Gamedefs', 16)) # Loading entrance names...
-        LoadEntranceNames(True)
-        if dlg: dlg.setValue(7)
-
-    except Exception as e: raise
-    #    # Something went wrong.
-    #    if dlg: dlg.setValue(7) # autocloses it
-    #    QtWidgets.QMessageBox.information(None, trans.string('Gamedefs', 17), trans.string('Gamedefs', 18, '[error]', str(e)))
-    #    if name is not None: LoadGameDef(None)
-    #    return False
-
-
-    # Success!
-    if dlg: setSetting('LastGameDef', name)
-    return True
-
-
-class ReggieGameDefinition():
-    """
-    A class that defines a NSMBW hack: songs, tilesets, sprites, songs, etc.
-    """
-
-    # Gamedef File - has 2 values: name (str) and patch (bool)
-    class GameDefinitionFile():
-        """
-        A class that defines a filepath, and some options
-        """
-        def __init__(self, path, patch):
-            """
-            Initializes the GameDefinitionFile
-            """
-            self.path = path
-            self.patch = patch
-
-    def __init__(self, name=None):
-        """
-        Initializes the ReggieGameDefinition
-        """
-        self.InitAsEmpty()
-
-        # Try to init it from name if possible
-        NoneTypes = (None, 'None', 0, '', True, False)
-        if name in NoneTypes: return
-        else:
-            try: self.InitFromName(name)
-            except Exception: self.InitAsEmpty() # revert
-
-
-    def InitAsEmpty(self):
-        """
-        Sets all properties to their default values
-        """
-        gdf = self.GameDefinitionFile
-
-        self.custom = False
-        self.base = None # gamedef to use as a base
-        self.gamepath = None
-        self.name = trans.string('Gamedefs', 13) # 'New Super Mario Bros. Wii'
-        self.description = trans.string('Gamedefs', 14) # 'A new Mario adventure!<br>' and the date
-        self.version = '2'
-
-        self.sprites = sprites
-
-        self.files = {
-            'entrancetypes': gdf(None, False),
-            'levelnames': gdf(None, False),
-            'music': gdf(None, False),
-            'spritecategories': gdf(None, False),
-            'spritedata': gdf(None, False),
-            'spritelistdata': gdf(None, False),
-            'spritenames': gdf(None, False),
-            'tilesets': gdf(None, False),
-            'ts1_descriptions': gdf(None, False),
-            }
-        self.folders = {
-            'sprites': gdf(None, False),
-            }
-
-    def InitFromName(self, name):
-        """
-        Attempts to open/load a Game Definition from a name string
-        """
-        raise NotImplementedError
-    
-    def GetGamePath(self):
-        """
-        Returns the game path
-        """
-        if not self.custom: return str(setting('GamePath_NSMBU'))
-        name = 'GamePath_' + self.name
-        setname = setting(name)
-
-        # Use the default if there are no settings for this yet
-        if setname is None: return str(setting('GamePath_NSMBU'))
-        else: return str(setname)
-
-    def SetGamePath(self, path):
-        """
-        Sets the game path
-        """
-        if not self.custom: setSetting('GamePath_NSMBU', path)
-        else:
-            name = 'GamePath_' + self.name
-            setSetting(name, path)
-
-    def GetGamePaths(self):
-        """
-        Returns game paths of this gamedef and its bases
-        """
-        mainpath = str(setting('GamePath_NSMBU'))
-        if not self.custom: return [mainpath,]
-
-        name = 'GamePath_' + self.name
-        stg = setting(name)
-        if self.base is None:
-            return [mainpath, stg]
-        else:
-            paths = self.base.GetGamePaths()
-            paths.append(stg)
-            return paths
-
-
-    def GetLastLevel(self):
-        """
-        Returns the last loaded level
-        """
-        if not self.custom: return setting('LastLevelNSMBUversion')
-        name = 'LastLevel_' + self.name
-        stg = setting(name)
-
-        # Use the default if there are no settings for this yet
-        if stg is None: return setting('LastLevelNSMBUversion')
-        else: return stg
-
-    def SetLastLevel(self, path):
-        """
-        Sets the last loaded level
-        """
-        if path in (None, 'None', 'none', True, 'True', 'true', False, 'False', 'false', 0, 1, ''): return
-        #print('Last loaded level set to ' + str(path))
-        if not self.custom: setSetting('LastLevelNSMBUversion', path)
-        else:
-            name = 'LastLevel_' + self.name
-            setSetting(name, path)
-
-
-    def recursiveFiles(self, name, isPatch=False, folder=False):
-        """
-        Checks each base of this gamedef and returns a list of successive file paths
-        """
-        ListToCheckIn = self.files if not folder else self.folders
-
-        # This can be handled 4 ways: if we do or don't have a base, and if we do or don't have a copy of the file.
-        if self.base is None:
-            if ListToCheckIn[name].path is None: # No base, no file
-
-                if isPatch: return [], True
-                else: return []
-
-            else: # No base, file
-
-                alist = []
-                alist.append(ListToCheckIn[name].path)
-                if isPatch: return alist, ListToCheckIn[name].patch
-                else: return alist
-
-        else:
-
-            if isPatch: listUpToNow, wasPatch = self.base.recursiveFiles(name, True, folder)
-            else: listUpToNow = self.base.recursiveFiles(name, False, folder)
-
-            if ListToCheckIn[name].path is None: # Base, no file
-
-                if isPatch: return listUpToNow, wasPatch
-                else: return listUpToNow
-
-            else: # Base, file
-
-                # If it's a patch, just add it to the end of the list
-                if ListToCheckIn[name].patch: listUpToNow.append(ListToCheckIn[name].path)
-
-                # If it's not (it's free-standing), make a new list and start over
-                else:
-                    newlist = []
-                    newlist.append(ListToCheckIn[name].path)
-                    if isPatch: return newlist, False
-                    else: return newlist
-
-                # Return
-                if isPatch: return listUpToNow, wasPatch
-                else: return listUpToNow
-
-    def multipleRecursiveFiles(self, *args):
-        """
-        Returns multiple recursive files in order of least recent to most recent as a list of tuples, one list per gamedef base
-        """
-
-        # This should be very simple
-        # Each arg should be a file name
-        if self.base is None: main = [] # start a new level
-        else: main = self.base.multipleRecursiveFiles(*args)
-
-        # Add the values from this level, and then return it
         result = []
-        for name in args:
-            try:
-                file = self.files[name]
-                if file.path is None: raise KeyError
-                result.append(self.files[name])
-            except KeyError: result.append(None)
-        main.append(tuple(result))
-        return main
+        for i in range(4):
+            result.append(str(self.lineEdits[i].text()))
+        return tuple(result)
 
-    def file(self, name):
+
+class OldTilesetsTab(QtWidgets.QWidget):
+    def __init__(self):
+        QtWidgets.QWidget.__init__(self)
+
+        self.tile0 = QtWidgets.QComboBox()
+        self.tile1 = QtWidgets.QComboBox()
+        self.tile2 = QtWidgets.QComboBox()
+        self.tile3 = QtWidgets.QComboBox()
+
+        self.widgets = [self.tile0, self.tile1, self.tile2, self.tile3]
+        names = [Area.tileset0, Area.tileset1, Area.tileset2, Area.tileset3]
+        slots = [self.HandleTileset0Choice, self.HandleTileset1Choice, self.HandleTileset2Choice, self.HandleTileset3Choice]
+
+        self.currentChoices = [None, None, None, None]
+
+        TilesetNamesIterable = SimpleTilesetNames()
+
+        for idx, widget, name, data, slot in zip(range(4), self.widgets, names, TilesetNamesIterable, slots):
+            # This loop runs once for each tileset.
+            # First, find the current index and custom-tileset strings
+            if name == '': # No tileset selected, the current index should be None
+                ts_index = trans.string('AreaDlg', 15) # None
+                custom = ''
+                custom_fname = trans.string('AreaDlg', 16) # [CUSTOM]
+            else: # Tileset selected
+                ts_index = trans.string('AreaDlg', 18, '[name]', name) # Custom filename... [name]
+                custom = name
+                custom_fname = trans.string('AreaDlg', 17, '[name]', name) # [CUSTOM] [name]
+
+            # Add items to the widget:
+            # - None
+            widget.addItem(trans.string('AreaDlg', 15), '') # None
+            # - Retail Tilesets
+            for tfile, tname in data:
+                text = trans.string('AreaDlg', 19, '[name]', tname, '[file]', tfile) # [name] ([file])
+                widget.addItem(text, tfile)
+                if name == tfile:
+                    ts_index = text
+                    custom = ''
+            # - Custom Tileset
+            widget.addItem(trans.string('AreaDlg', 18, '[name]', custom), custom_fname) # Custom filename... [name]
+
+            # Set the current index
+            item_idx = widget.findText(ts_index)
+            self.currentChoices[idx] = item_idx
+            widget.setCurrentIndex(item_idx)
+
+            # Handle combobox changes
+            widget.activated.connect(slot)
+
+        # don't allow ts0 to be removable
+        self.tile0.removeItem(0)
+
+        mainLayout = QtWidgets.QVBoxLayout()
+        tile0Box = QtWidgets.QGroupBox(trans.string('AreaDlg', 11))
+        tile1Box = QtWidgets.QGroupBox(trans.string('AreaDlg', 12))
+        tile2Box = QtWidgets.QGroupBox(trans.string('AreaDlg', 13))
+        tile3Box = QtWidgets.QGroupBox(trans.string('AreaDlg', 14))
+
+        t0 = QtWidgets.QVBoxLayout()
+        t0.addWidget(self.tile0)
+        t1 = QtWidgets.QVBoxLayout()
+        t1.addWidget(self.tile1)
+        t2 = QtWidgets.QVBoxLayout()
+        t2.addWidget(self.tile2)
+        t3 = QtWidgets.QVBoxLayout()
+        t3.addWidget(self.tile3)
+
+        tile0Box.setLayout(t0)
+        tile1Box.setLayout(t1)
+        tile2Box.setLayout(t2)
+        tile3Box.setLayout(t3)
+
+        mainLayout.addWidget(tile0Box)
+        mainLayout.addWidget(tile1Box)
+        mainLayout.addWidget(tile2Box)
+        mainLayout.addWidget(tile3Box)
+        mainLayout.addStretch(1)
+        self.setLayout(mainLayout)
+
+    @QtCore.pyqtSlot(int)
+    def HandleTileset0Choice(self, index):
+        self.HandleTilesetChoice(0, index)
+
+    @QtCore.pyqtSlot(int)
+    def HandleTileset1Choice(self, index):
+        self.HandleTilesetChoice(1, index)
+
+    @QtCore.pyqtSlot(int)
+    def HandleTileset2Choice(self, index):
+        self.HandleTilesetChoice(2, index)
+
+    @QtCore.pyqtSlot(int)
+    def HandleTileset3Choice(self, index):
+        self.HandleTilesetChoice(3, index)
+
+    def HandleTilesetChoice(self, tileset, index):
+        w = self.widgets[tileset]
+
+        if index == (w.count() - 1):
+            fname = str(w.itemData(index))
+            fname = fname[len(trans.string('AreaDlg', 17, '[name]', '')):]
+
+            dbox = InputBox()
+            dbox.setWindowTitle(trans.string('AreaDlg', 20))
+            dbox.label.setText(trans.string('AreaDlg', 21))
+            dbox.textbox.setMaxLength(31)
+            dbox.textbox.setText(fname)
+            result = dbox.exec_()
+
+            if result == QtWidgets.QDialog.Accepted:
+                fname = str(dbox.textbox.text())
+                if fname.endswith('.szs'): fname = fname[:-3]
+
+                w.setItemText(index, trans.string('AreaDlg', 18, '[name]', fname))
+                w.setItemData(index, trans.string('AreaDlg', 17, '[name]', fname))
+            else:
+                w.setCurrentIndex(self.currentChoices[tileset])
+                return
+
+        self.currentChoices[tileset] = index
+
+    def values(self):
         """
-        Returns a file by recursively checking successive gamedef bases
+        Returns all 4 tileset choices
         """
-        if name not in self.files: return
-
-        if self.files[name].path is not None: return self.files[name].path
-        else:
-            if self.base is None: return
-            return self.base.file(name) # it can recursively check its base, too
-
-    def getImageClasses(self):
-        """
-        Gets all image classes
-        """
-        if not self.custom:
-            return self.sprites.ImageClasses
-
-        if self.base is not None:
-            images = dict(self.base.getImageClasses())
-        else:
-            images = {}
-
-        if hasattr(self.sprites, 'ImageClasses'):
-            images.update(self.sprites.ImageClasses)
-        return images
-
-
-
-# Related functions
-def GetPath(id_):
-    """
-    Checks the game definition and the translation and returns the appropriate path
-    """
-    global gamedef
-    global trans
-
-    # If there's a custom gamedef, use that
-    if gamedef.custom and gamedef.file(id_) is not None: return gamedef.file(id_)
-    else: return trans.path(id_)
-
-
-def getMusic():
-    """
-    Uses the current gamedef + translation to get the music data, and returns it as a list of tuples
-    """
-
-    transsong = trans.files['music']
-    gamedefsongs, isPatch = gamedef.recursiveFiles('music', True)
-    if isPatch:
-        paths = [transsong]
-        for path in gamedefsongs: paths.append(path)
-    else: paths = gamedefsongs
-
-    songs = []
-    for path in paths:
-        musicfile = open(path)
-        data = musicfile.read()
-        musicfile.close()
-        del musicfile
-
-        # Split the data
-        data = data.split('\n')
-        while '' in data: data.remove('')
-        for i, line in enumerate(data): data[i] = line.split(':')
-
-        # Apply it
-        for songid, name in data:
-            found = False
-            for song in songs:
-                if song[0] == songid:
-                    song[1] = name
-                    found = True
-            if not found:
-                songs.append([songid, name])
-
-    return sorted(songs, key=lambda song: int(song[0]))
-
-def FindGameDef(name, skip=None):
-    "Helper function to find a game def with a specific name. Skip will be skipped"""
-    toSearch = [None] # Add the original game first
-    for folder in os.listdir('reggiedata/games'): toSearch.append(folder)
-
-    for folder in toSearch:
-        if folder == skip: continue
-        def_ = ReggieGameDefinition(folder)
-        if (not def_.custom) and (folder is not None): continue
-        if def_.name == name: return def_
-
-# Translations
-
-def LoadTranslation():
-    """
-    Loads the translation
-    """
-    global trans
-
-    name = setting('Translation')
-    eng = (None, 'None', 'English', '', 0)
-    if name in eng: trans = ReggieTranslation(None)
-    else: trans = ReggieTranslation(name)
-
-    if generateStringsXML: trans.generateXML()
-
-class LevelScene(QtWidgets.QGraphicsScene):
-    """
-    GraphicsScene subclass for the level scene
-    """
-    def __init__(self, *args):
-        global theme
-
-        self.bgbrush = QtGui.QBrush(theme.color('bg'))
-        QtWidgets.QGraphicsScene.__init__(self, *args)
-
-    def drawBackground(self, painter, rect):
-        """
-        Draws all visible tiles
-        """
-        painter.fillRect(rect, self.bgbrush)
-        if not hasattr(Area, 'layers'): return
-
-        drawrect = QtCore.QRectF(rect.x() / TileWidth, rect.y() / TileWidth, rect.width() / TileWidth + 1, rect.height() / TileWidth + 1)
-        isect = drawrect.intersects
-
-        layer0 = []; l0add = layer0.append
-        layer1 = []; l1add = layer1.append
-        layer2 = []; l2add = layer2.append
-
-        type_obj = ObjectItem
-        ii = isinstance
-
-        x1 = 1024
-        y1 = 512
-        x2 = 0
-        y2 = 0
-
-        # iterate through each object
-        funcs = [layer0.append, layer1.append, layer2.append]
-        show = [Layer0Shown, Layer1Shown, Layer2Shown]
-        for layer, add, process in zip(Area.layers, funcs, show):
-            if not process: continue
-            for item in layer:
-                if not isect(item.LevelRect): continue
-                add(item)
-                xs = item.objx
-                xe = xs+item.width
-                ys = item.objy
-                ye = ys+item.height
-                if xs < x1: x1 = xs
-                if xe > x2: x2 = xe
-                if ys < y1: y1 = ys
-                if ye > y2: y2 = ye
-
-        width = x2 - x1
-        height = y2 - y1
-        tiles = Tiles
-
-        # create and draw the tilemaps
-        for layer in [layer2, layer1, layer0]:
-            if len(layer) > 0:
-                tmap = []
-                i = 0
-                while i < height:
-                    tmap.append([None] * width)
-                    i += 1
-
-                for item in layer:
-                    startx = item.objx - x1
-                    desty = item.objy - y1
-
-                    exists = True
-                    if ObjectDefinitions[item.tileset] is None:
-                        exists = False
-                    elif ObjectDefinitions[item.tileset][item.type] is None:
-                        exists = False
-
-                    for row in item.objdata:
-                        destrow = tmap[desty]
-                        destx = startx
-                        for tile in row:
-                            if not exists:
-                                destrow[destx] = -1
-                            elif tile > 0:
-                                destrow[destx] = tile
-                            destx += 1
-                        desty += 1
-
-                painter.save()
-                painter.translate(x1 * TileWidth, y1 * TileWidth)
-                drawPixmap = painter.drawPixmap
-                desty = 0
-                for row in tmap:
-                    destx = 0
-                    for tile in row:
-                        pix = None
-
-                        if tile == -1:
-                            # Draw unknown tiles
-                            pix = None#Overrides[108].getCurrentTile()
-                        elif tile is not None:
-                            pix = tiles[tile].getCurrentTile()
-
-                        if pix is not None:
-                            painter.drawPixmap(destx, desty, pix)
-
-                        destx += TileWidth
-                    desty += TileWidth
-                painter.restore()
-
+        result = []
+        for i in range(4):
+            widget = eval('self.tile%d' % i)
+            idx = widget.currentIndex()
+            name = str(widget.itemData(idx))
+            result.append(name)
+        return tuple(result)
 
 
 class LevelViewWidget(QtWidgets.QGraphicsView):
@@ -9620,70 +9979,187 @@ class LevelViewWidget(QtWidgets.QGraphicsView):
             painter.drawTiledPixmap(rect, board, QtCore.QPointF(rect.x(), rect.y()))
 
 
+class InfoPreviewWidget(QtWidgets.QWidget):
+    """
+    Widget that shows a preview of the level metadata info - available in vertical & horizontal flavors
+    """
+    def __init__(self, direction):
+        """
+        Creates and initializes the widget
+        """
+        QtWidgets.QWidget.__init__(self)
+        self.direction = direction
+
+        self.Label1 = QtWidgets.QLabel('')
+        if self.direction == Qt.Horizontal: self.Label2 = QtWidgets.QLabel('')
+        self.updateLabels()
+
+        self.mainLayout = QtWidgets.QHBoxLayout()
+        self.mainLayout.addWidget(self.Label1)
+        if self.direction == Qt.Horizontal: self.mainLayout.addWidget(self.Label2)
+        self.setLayout(self.mainLayout)
+
+        if self.direction == Qt.Horizontal: self.setMinimumWidth(256)
+
+    def updateLabels(self):
+        """
+        Updates the widget labels
+        """
+        if ('Area' not in globals()) or not hasattr(Area, 'filename'): # can't get level metadata if there's no level
+            self.Label1.setText('')
+            if self.direction == Qt.Horizontal: self.Label2.setText('')
+            return
+
+        a = [ # MUST be a list, not a tuple
+            mainWindow.fileTitle,
+            Area.Title,
+            trans.string('InfoDlg', 8, '[name]', Area.Creator),
+            trans.string('InfoDlg', 5) + ' ' + Area.Author,
+            trans.string('InfoDlg', 6) + ' ' + Area.Group,
+            trans.string('InfoDlg', 7) + ' ' + Area.Webpage,
+            ]
+
+        for b, section in enumerate(a): # cut off excessively long strings
+            if self.direction == Qt.Vertical: short = clipStr(section, 128)
+            else: short = clipStr(section, 184)
+            if short is not None: a[b] = short + '...'
+
+        if self.direction == Qt.Vertical:
+            str1 = a[0]+'<br>'+a[1]+'<br>'+a[2]+'<br>'+a[3]+'<br>'+a[4]+'<br>'+a[5]
+            self.Label1.setText(str1)
+        else:
+            str1 = a[0]+'<br>'+a[1]+'<br>'+a[2]
+            str2 = a[3]+'<br>'+a[4]+'<br>'+a[5]
+            self.Label1.setText(str1)
+            self.Label2.setText(str2)
+
+        self.update()
 
 
-####################################################################
-####################################################################
-####################################################################
+class ZoomWidget(QtWidgets.QWidget):
+    """
+    Widget that allows easy zoom level control
+    """
+    def __init__(self):
+        """
+        Creates and initializes the widget
+        """
+        QtWidgets.QWidget.__init__(self)
+        maxwidth = 512-128
+        maxheight = 20
 
-class HexSpinBox(QtWidgets.QSpinBox):
-    class HexValidator(QtGui.QValidator):
-        def __init__(self, min, max):
-            QtGui.QValidator.__init__(self)
-            self.valid = set('0123456789abcdef')
-            self.min = min
-            self.max = max
+        self.slider = QtWidgets.QSlider(Qt.Horizontal)
+        self.minLabel = QtWidgets.QPushButton()
+        self.minusLabel = QtWidgets.QPushButton()
+        self.plusLabel = QtWidgets.QPushButton()
+        self.maxLabel = QtWidgets.QPushButton()
 
-        def validate(self, input, pos):
-            try:
-                input = str(input).lower()
-            except Exception:
-                return (self.Invalid, input, pos)
-            valid = self.valid
+        self.slider.setMaximumHeight(maxheight)
+        self.slider.setMinimum(0)
+        self.slider.setMaximum(len(mainWindow.ZoomLevels)-1)
+        self.slider.setTickInterval(2)
+        self.slider.setTickPosition(self.slider.TicksAbove)
+        self.slider.setPageStep(1)
+        self.slider.setTracking(True)
+        self.slider.setSliderPosition(self.findIndexOfLevel(100))
+        self.slider.valueChanged.connect(self.sliderMoved)
 
-            for char in input:
-                if char not in valid:
-                    return (self.Invalid, input, pos)
+        self.minLabel.setIcon(GetIcon('zoommin'))
+        self.minusLabel.setIcon(GetIcon('zoomout'))
+        self.plusLabel.setIcon(GetIcon('zoomin'))
+        self.maxLabel.setIcon(GetIcon('zoommax'))
+        self.minLabel.setFlat(True)
+        self.minusLabel.setFlat(True)
+        self.plusLabel.setFlat(True)
+        self.maxLabel.setFlat(True)
+        self.minLabel.clicked.connect(mainWindow.HandleZoomMin)
+        self.minusLabel.clicked.connect(mainWindow.HandleZoomOut)
+        self.plusLabel.clicked.connect(mainWindow.HandleZoomIn)
+        self.maxLabel.clicked.connect(mainWindow.HandleZoomMax)
 
-            try:
-                value = int(input, 16)
-            except ValueError:
-                # If value == '' it raises ValueError
-                return (self.Invalid, input, pos)
+        self.layout = QtWidgets.QGridLayout()
+        self.layout.addWidget(self.minLabel,   0, 0)
+        self.layout.addWidget(self.minusLabel, 0, 1)
+        self.layout.addWidget(self.slider,     0, 2)
+        self.layout.addWidget(self.plusLabel,  0, 3)
+        self.layout.addWidget(self.maxLabel,   0, 4)
+        self.layout.setVerticalSpacing(0)
+        self.layout.setHorizontalSpacing(0)
+        self.layout.setContentsMargins(0,0,4,0)
 
-            if value < self.min or value > self.max:
-                return (self.Intermediate, input, pos)
+        self.setLayout(self.layout)
+        self.setMinimumWidth(maxwidth)
+        self.setMaximumWidth(maxwidth)
+        self.setMaximumHeight(maxheight)
 
-            return (self.Acceptable, input, pos)
+    def sliderMoved(self):
+        """
+        Handle the slider being moved
+        """
+        mainWindow.ZoomTo(mainWindow.ZoomLevels[self.slider.value()])
+
+    def setZoomLevel(self, newLevel):
+        """
+        Moves the slider to the zoom level given
+        """
+        self.slider.setSliderPosition(self.findIndexOfLevel(newLevel))
+
+    def findIndexOfLevel(self, level):
+        for i, mainlevel in enumerate(mainWindow.ZoomLevels):
+            if float(mainlevel) == float(level): return i
 
 
-    def __init__(self, format='%04X', *args):
-        self.format = format
-        QtWidgets.QSpinBox.__init__(self, *args)
-        self.validator = self.HexValidator(self.minimum(), self.maximum())
+class ZoomStatusWidget(QtWidgets.QWidget):
+    """
+    Shows the current zoom level, in percent
+    """
+    def __init__(self):
+        """
+        Creates and initializes the widget
+        """
+        QtWidgets.QWidget.__init__(self)
+        self.label = QtWidgets.QPushButton('100%')
+        self.label.setFlat(True)
+        self.label.clicked.connect(mainWindow.HandleZoomActual)
 
-    def setMinimum(self, value):
-        self.validator.min = value
-        QtWidgets.QSpinBox.setMinimum(self, value)
+        self.layout = QtWidgets.QHBoxLayout()
+        self.layout.addWidget(self.label)
+        self.layout.setContentsMargins(4,0,8,0)
+        self.setMaximumWidth(56)
 
-    def setMaximum(self, value):
-        self.validator.max = value
-        QtWidgets.QSpinBox.setMaximum(self, value)
+        self.setLayout(self.layout)
 
-    def setRange(self, min, max):
-        self.validator.min = min
-        self.validator.max = max
-        QtWidgets.QSpinBox.setMinimum(self, min)
-        QtWidgets.QSpinBox.setMaximum(self, max)
+    def setZoomLevel(self, zoomLevel):
+        """
+        Updates the widget
+        """
+        if float(int(zoomLevel)) == float(zoomLevel):
+            self.label.setText(str(int(zoomLevel))+'%')
+        else:
+            self.label.setText(str(float(zoomLevel))+'%')
 
-    def validate(self, text, pos):
-        return self.validator.validate(text, pos)
 
-    def textFromValue(self, value):
-        return self.format % value
+class ListWidgetWithToolTipSignal(QtWidgets.QListWidget):
+    """
+    A QtWidgets.QListWidget that includes a signal that
+    is emitted when a tooltip is about to be shown. Useful
+    for making tooltips that update every time you show
+    them.
+    """
+    toolTipAboutToShow = QtCore.pyqtSignal(QtWidgets.QListWidgetItem)
 
-    def valueFromText(self, value):
-        return int(str(value), 16)
+    def viewportEvent(self, e):
+        """
+        Handles viewport events
+        """
+        if e.type() == e.ToolTip:
+            self.toolTipAboutToShow.emit(self.itemFromIndex(self.indexAt(e.pos())))
+
+        return super().viewportEvent(e)
+
+#####################################################################
+############################## DIALOGS ##############################
+#####################################################################
 
 class InputBox(QtWidgets.QDialog):
     Type_TextBox = 1
@@ -9819,7 +10295,6 @@ class ObjectShiftDialog(QtWidgets.QDialog):
         self.setLayout(mainLayout)
 
 
-
 class ObjectTilesetSwapDialog(QtWidgets.QDialog):
     """
     Lets you pick tilesets to swap objects to
@@ -9861,7 +10336,6 @@ class ObjectTilesetSwapDialog(QtWidgets.QDialog):
         mainLayout.addWidget(self.DoExchange)
         mainLayout.addWidget(buttonBox)
         self.setLayout(mainLayout)
-
 
 
 class ObjectTypeSwapDialog(QtWidgets.QDialog):
@@ -9921,7 +10395,6 @@ class ObjectTypeSwapDialog(QtWidgets.QDialog):
         mainLayout.addWidget(self.DoExchange)
         mainLayout.addWidget(buttonBox)
         self.setLayout(mainLayout)
-
 
 
 class MetaInfoDialog(QtWidgets.QDialog):
@@ -10041,14 +10514,14 @@ class MetaInfoDialog(QtWidgets.QDialog):
             self.changepw.setDisabled(True)
 
 
-#   To all would be crackers who are smart enough to reach here:
-#
-#   Make your own damn levels.
-#
-#
-#
-#       - The management
-#
+    #   To all would be crackers who are smart enough to reach here:
+    #
+    #   Make your own levels.
+    #
+    #
+    #
+    #       - The management
+    #
 
 
     def ChangeButton(self):
@@ -10123,8 +10596,6 @@ class MetaInfoDialog(QtWidgets.QDialog):
             self.changepw.setDisabled(False)
 
 
-
-# Sets up the Area Options Menu
 class AreaOptionsDialog(QtWidgets.QDialog):
     """
     Dialog which lets you choose among various area options from tabs
@@ -10154,416 +10625,6 @@ class AreaOptionsDialog(QtWidgets.QDialog):
         self.setLayout(mainLayout)
 
 
-class LoadingTab(QtWidgets.QWidget):
-    def __init__(self):
-        QtWidgets.QWidget.__init__(self)
-
-        self.unk1 = QtWidgets.QSpinBox()
-        self.unk1.setRange(0, 0x255)
-        self.unk1.setToolTip(trans.string('AreaDlg', 25))
-        self.unk1.setValue(Area.unk1)
-        
-        self.unk2 = QtWidgets.QSpinBox()
-        self.unk2.setRange(0, 255)
-        self.unk2.setToolTip(trans.string('AreaDlg', 25))
-        self.unk2.setValue(Area.unk2)
-
-        self.wrap = QtWidgets.QCheckBox(trans.string('AreaDlg', 7))
-        self.wrap.setToolTip(trans.string('AreaDlg', 8))
-        self.wrap.setChecked((Area.wrapFlag & 1) != 0)        
-
-        self.timer = QtWidgets.QSpinBox()
-        self.timer.setRange(0, 999)
-        self.timer.setToolTip(trans.string('AreaDlg', 4))
-        self.timer.setValue(Area.timeLimit + 100)
-
-        self.timelimit2 = QtWidgets.QSpinBox()
-        self.timelimit2.setRange(0, 999)
-        self.timelimit2.setToolTip(trans.string('AreaDlg', 38))
-        self.timelimit2.setValue(Area.timelimit2)
-
-        self.timelimit3 = QtWidgets.QSpinBox()
-        self.timelimit3.setRange(0, 999)
-        self.timelimit3.setToolTip(trans.string('AreaDlg', 38))
-        self.timelimit3.setValue(Area.timelimit3)           
-        
-        self.unk3 = QtWidgets.QSpinBox()
-        self.unk3.setRange(0, 999)
-        self.unk3.setToolTip(trans.string('AreaDlg', 26))
-        self.unk3.setValue(Area.unk3)
-
-        self.unk4 = QtWidgets.QSpinBox()
-        self.unk4.setRange(0, 999)
-        self.unk4.setToolTip(trans.string('AreaDlg', 26))
-        self.unk4.setValue(Area.unk4)
-
-        self.unk5 = QtWidgets.QSpinBox()
-        self.unk5.setRange(0, 999)
-        self.unk5.setToolTip(trans.string('AreaDlg', 26))
-        self.unk5.setValue(Area.unk5)
-
-        self.unk6 = QtWidgets.QSpinBox()
-        self.unk6.setRange(0, 999)
-        self.unk6.setToolTip(trans.string('AreaDlg', 26))
-        self.unk6.setValue(Area.unk6)
-
-        self.unk7 = QtWidgets.QSpinBox()
-        self.unk7.setRange(0, 999)
-        self.unk7.setToolTip(trans.string('AreaDlg', 26))
-        self.unk7.setValue(Area.unk7)     
-        
-        settingsLayout = QtWidgets.QFormLayout()
-        settingsLayout.addRow(trans.string('AreaDlg', 22), self.unk1)
-        settingsLayout.addRow(trans.string('AreaDlg', 23), self.unk2)
-        settingsLayout.addRow(trans.string('AreaDlg', 3), self.timer)
-        settingsLayout.addRow(trans.string('AreaDlg', 36), self.timelimit2)
-        settingsLayout.addRow(trans.string('AreaDlg', 37), self.timelimit3) 
-        settingsLayout.addRow(trans.string('AreaDlg', 24), self.unk3)        
-        settingsLayout.addRow(trans.string('AreaDlg', 32), self.unk4)
-        settingsLayout.addRow(trans.string('AreaDlg', 33), self.unk5)
-        settingsLayout.addRow(trans.string('AreaDlg', 34), self.unk6)
-        settingsLayout.addRow(trans.string('AreaDlg', 35), self.unk7)       
-        settingsLayout.addRow(self.wrap)
-
-        Layout = QtWidgets.QVBoxLayout()
-        Layout.addLayout(settingsLayout)
-        Layout.addStretch(1)
-        self.setLayout(Layout)
-
-
-class TilesetsTab(QtWidgets.QWidget):
-    def __init__(self):
-        QtWidgets.QWidget.__init__(self)
-        self.setMinimumWidth(384)
-
-        # Set up each tileset
-        self.widgets = []
-        self.trees = []
-        self.lineEdits = []
-        self.itemDict = [{}, {}, {}, {}]
-        self.noneItems = []
-
-        for slot in range(4):
-            # Create the main widget
-            widget = QtWidgets.QWidget()
-            self.widgets.append(widget)
-
-            # Create the tree widget
-            tree = QtWidgets.QTreeWidget()
-            tree.setColumnCount(2)
-            tree.setHeaderLabels([trans.string('AreaDlg', 28), trans.string('AreaDlg', 29)]) # ['Name', 'File']
-            tree.setIndentation(16)
-            if slot == 0: handler = self.handleTreeSel0
-            elif slot == 1: handler = self.handleTreeSel1
-            elif slot == 2: handler = self.handleTreeSel2
-            else: handler = self.handleTreeSel3
-            tree.itemSelectionChanged.connect(handler)
-            self.trees.append(tree)
-
-            # Add "None" entry
-            item = QtWidgets.QTreeWidgetItem()
-            item.setText(0, trans.string('AreaDlg', 15)) # 'None'
-            tree.addTopLevelItem(item)
-            self.noneItems.append(item)
-
-            # Keep an unsorted list for the textbox autocomplete
-            tilesetList = []
-
-            # Add entries for each tileset
-            def ParseCategory(items):
-                """
-                Parses a list of strings and returns a tuple of QTreeWidgetItem's
-                """
-                nodes = []
-                for item in items:
-                    node = QtWidgets.QTreeWidgetItem()
-
-                    # Check if it's a tileset or a category
-                    if isinstance(item[1], str):
-                        # It's a tileset
-                        node.setText(0, item[1])
-                        node.setText(1, item[0])
-                        node.setToolTip(0, item[1])
-                        node.setToolTip(1, item[0])
-                        self.itemDict[slot][item[0]] = node
-                        tilesetList.append(item[0])
-                    else:
-                        # It's a category
-                        node.setText(0, item[0])
-                        node.setToolTip(0, item[0])
-                        node.setFlags(Qt.ItemIsEnabled)
-                        children = ParseCategory(item[1])
-                        for cnode in children:
-                            node.addChild(cnode)
-                    nodes.append(node)
-                return tuple(nodes)
-            categories = ParseCategory(TilesetNames[slot][0])
-            tree.addTopLevelItems(categories)
-
-            # Create the line edit
-            line = QtWidgets.QLineEdit()
-            line.textChanged.connect(eval('self.handleTextEdit%d' % slot))
-            line.setCompleter(QtWidgets.QCompleter(tilesetList))
-            line.setPlaceholderText(trans.string('AreaDlg', 30)) # '(None)'
-            self.lineEdits.append(line)
-            line.setText(eval('Area.tileset%d' % slot))
-            self.handleTextEdit(slot)
-            # Above line: For some reason, PyQt doesn't automatically call
-            # the handler if (Area.tileset%d % slot) == ''
-
-            # Create the layout and add it to the widget
-            L = QtWidgets.QGridLayout()
-            L.addWidget(tree, 0, 0, 1, 2)
-            L.addWidget(QtWidgets.QLabel(trans.string('AreaDlg', 31, '[slot]', slot)), 1, 0) # 'Tilesets (Pa[slot])'
-            L.addWidget(line, 1, 1)
-            L.setRowStretch(0, 1)
-            widget.setLayout(L)
-
-        # Set up the tab widget
-        T = QtWidgets.QTabWidget()
-        T.setTabPosition(T.West)
-        T.setUsesScrollButtons(False)
-        T.addTab(self.widgets[0], trans.string('AreaDlg', 11)) # 'Standard Suite'
-        T.addTab(self.widgets[1], trans.string('AreaDlg', 12)) # 'Stage Suite'
-        T.addTab(self.widgets[2], trans.string('AreaDlg', 13)) # 'Background Suite'
-        T.addTab(self.widgets[3], trans.string('AreaDlg', 14)) # 'Interactive Suite'
-        L = QtWidgets.QVBoxLayout()
-        L.addWidget(T)
-        self.setLayout(L)
-        return
-
-    # Tree handlers
-    def handleTreeSel0(self):
-        self.handleTreeSel(0)
-    def handleTreeSel1(self):
-        self.handleTreeSel(1)
-    def handleTreeSel2(self):
-        self.handleTreeSel(2)
-    def handleTreeSel3(self):
-        self.handleTreeSel(3)
-    def handleTreeSel(self, slot):
-        """
-        Handles changes to the selections in all tree widgets
-        """
-        selItems = self.trees[slot].selectedItems()
-        if len(selItems) != 1: return
-        item = selItems[0]
-
-        value = str(item.text(1))
-        self.lineEdits[slot].setText(value)
-
-    # Line-edit handlers
-    def handleTextEdit0(self):
-        self.handleTextEdit(0)
-    def handleTextEdit1(self):
-        self.handleTextEdit(1)
-    def handleTextEdit2(self):
-        self.handleTextEdit(2)
-    def handleTextEdit3(self):
-        self.handleTextEdit(3)
-    def handleTextEdit(self, slot):
-        """
-        Handles changes made to the line-edit widgets
-        """
-        self.trees[slot].clearSelection()
-        txt = str(self.lineEdits[slot].text())
-
-        if (txt in self.itemDict[slot]) or (txt == ''):
-            # Collapse all
-            for i in range(self.trees[slot].topLevelItemCount()):
-                self.trees[slot].collapseItem(self.trees[slot].topLevelItem(i))
-
-            # If there's no text, just select None
-            if txt == '':
-                self.noneItems[slot].setSelected(True)
-                return
-
-            # Find the item matching the description, and select it
-            item = self.itemDict[slot][txt]
-            item.setSelected(True)
-
-            # Expand all of its parents
-            parent = item.parent()
-            while parent is not None:
-                parent.setExpanded(True)
-                parent = parent.parent()
-
-    def values(self):
-        """
-        Returns all 4 tileset choices
-        """
-        result = []
-        for i in range(4):
-            result.append(str(self.lineEdits[i].text()))
-        return tuple(result)
-
-
-class OldTilesetsTab(QtWidgets.QWidget):
-    def __init__(self):
-        QtWidgets.QWidget.__init__(self)
-
-        self.tile0 = QtWidgets.QComboBox()
-        self.tile1 = QtWidgets.QComboBox()
-        self.tile2 = QtWidgets.QComboBox()
-        self.tile3 = QtWidgets.QComboBox()
-
-        self.widgets = [self.tile0, self.tile1, self.tile2, self.tile3]
-        names = [Area.tileset0, Area.tileset1, Area.tileset2, Area.tileset3]
-        slots = [self.HandleTileset0Choice, self.HandleTileset1Choice, self.HandleTileset2Choice, self.HandleTileset3Choice]
-
-        self.currentChoices = [None, None, None, None]
-
-        TilesetNamesIterable = SimpleTilesetNames()
-
-        for idx, widget, name, data, slot in zip(range(4), self.widgets, names, TilesetNamesIterable, slots):
-            # This loop runs once for each tileset.
-            # First, find the current index and custom-tileset strings
-            if name == '': # No tileset selected, the current index should be None
-                ts_index = trans.string('AreaDlg', 15) # None
-                custom = ''
-                custom_fname = trans.string('AreaDlg', 16) # [CUSTOM]
-            else: # Tileset selected
-                ts_index = trans.string('AreaDlg', 18, '[name]', name) # Custom filename... [name]
-                custom = name
-                custom_fname = trans.string('AreaDlg', 17, '[name]', name) # [CUSTOM] [name]
-
-            # Add items to the widget:
-            # - None
-            widget.addItem(trans.string('AreaDlg', 15), '') # None
-            # - Retail Tilesets
-            for tfile, tname in data:
-                text = trans.string('AreaDlg', 19, '[name]', tname, '[file]', tfile) # [name] ([file])
-                widget.addItem(text, tfile)
-                if name == tfile:
-                    ts_index = text
-                    custom = ''
-            # - Custom Tileset
-            widget.addItem(trans.string('AreaDlg', 18, '[name]', custom), custom_fname) # Custom filename... [name]
-
-            # Set the current index
-            item_idx = widget.findText(ts_index)
-            self.currentChoices[idx] = item_idx
-            widget.setCurrentIndex(item_idx)
-
-            # Handle combobox changes
-            widget.activated.connect(slot)
-
-        # don't allow ts0 to be removable
-        self.tile0.removeItem(0)
-
-        mainLayout = QtWidgets.QVBoxLayout()
-        tile0Box = QtWidgets.QGroupBox(trans.string('AreaDlg', 11))
-        tile1Box = QtWidgets.QGroupBox(trans.string('AreaDlg', 12))
-        tile2Box = QtWidgets.QGroupBox(trans.string('AreaDlg', 13))
-        tile3Box = QtWidgets.QGroupBox(trans.string('AreaDlg', 14))
-
-        t0 = QtWidgets.QVBoxLayout()
-        t0.addWidget(self.tile0)
-        t1 = QtWidgets.QVBoxLayout()
-        t1.addWidget(self.tile1)
-        t2 = QtWidgets.QVBoxLayout()
-        t2.addWidget(self.tile2)
-        t3 = QtWidgets.QVBoxLayout()
-        t3.addWidget(self.tile3)
-
-        tile0Box.setLayout(t0)
-        tile1Box.setLayout(t1)
-        tile2Box.setLayout(t2)
-        tile3Box.setLayout(t3)
-
-        mainLayout.addWidget(tile0Box)
-        mainLayout.addWidget(tile1Box)
-        mainLayout.addWidget(tile2Box)
-        mainLayout.addWidget(tile3Box)
-        mainLayout.addStretch(1)
-        self.setLayout(mainLayout)
-
-    @QtCore.pyqtSlot(int)
-    def HandleTileset0Choice(self, index):
-        self.HandleTilesetChoice(0, index)
-
-    @QtCore.pyqtSlot(int)
-    def HandleTileset1Choice(self, index):
-        self.HandleTilesetChoice(1, index)
-
-    @QtCore.pyqtSlot(int)
-    def HandleTileset2Choice(self, index):
-        self.HandleTilesetChoice(2, index)
-
-    @QtCore.pyqtSlot(int)
-    def HandleTileset3Choice(self, index):
-        self.HandleTilesetChoice(3, index)
-
-    def HandleTilesetChoice(self, tileset, index):
-        w = self.widgets[tileset]
-
-        if index == (w.count() - 1):
-            fname = str(w.itemData(index))
-            fname = fname[len(trans.string('AreaDlg', 17, '[name]', '')):]
-
-            dbox = InputBox()
-            dbox.setWindowTitle(trans.string('AreaDlg', 20))
-            dbox.label.setText(trans.string('AreaDlg', 21))
-            dbox.textbox.setMaxLength(31)
-            dbox.textbox.setText(fname)
-            result = dbox.exec_()
-
-            if result == QtWidgets.QDialog.Accepted:
-                fname = str(dbox.textbox.text())
-                if fname.endswith('.szs'): fname = fname[:-3]
-
-                w.setItemText(index, trans.string('AreaDlg', 18, '[name]', fname))
-                w.setItemData(index, trans.string('AreaDlg', 17, '[name]', fname))
-            else:
-                w.setCurrentIndex(self.currentChoices[tileset])
-                return
-
-        self.currentChoices[tileset] = index
-
-    def values(self):
-        """
-        Returns all 4 tileset choices
-        """
-        result = []
-        for i in range(4):
-            widget = eval('self.tile%d' % i)
-            idx = widget.currentIndex()
-            name = str(widget.itemData(idx))
-            result.append(name)
-        return tuple(result)
-
-def SimpleTilesetNames():
-    """
-    simple
-    """
-    # Category parser
-    def ParseCategory(items):
-        """
-        Parses a list of strings and returns a tuple of strings
-        """
-        result = []
-        for item in items:
-            if isinstance(item[1], str):
-                # It's a tileset
-                name = item[1]
-                file = item[0]
-                result.append((file, name))
-            else:
-                # It's a category
-                childStrings = ParseCategory(item[1])
-                for child in childStrings:
-                    result.append(child)
-        return result
-
-    pa0 = sorted(ParseCategory(TilesetNames[0][0]), key=lambda entry: entry[1])
-    pa1 = sorted(ParseCategory(TilesetNames[1][0]), key=lambda entry: entry[1])
-    pa2 = sorted(ParseCategory(TilesetNames[2][0]), key=lambda entry: entry[1])
-    pa3 = sorted(ParseCategory(TilesetNames[3][0]), key=lambda entry: entry[1])
-    return (pa0, pa1, pa2, pa3)
-
-
-
-#Sets up the Zones Menu
 class ZonesDialog(QtWidgets.QDialog):
     """
     Dialog which lets you choose among various from tabs
@@ -10650,7 +10711,6 @@ class ZonesDialog(QtWidgets.QDialog):
                 self.tabWidget.setTabText(tab, trans.string('ZonesDlg', 3, '[num]', tab+1))
 
         #self.NewButton.setEnabled(len(self.zoneTabs) < 8)
-
 
 
 class ZoneTab(QtWidgets.QWidget):
@@ -11050,15 +11110,7 @@ class ZoneTab(QtWidgets.QWidget):
             self.Zone_presets.setCurrentIndex(0)
         self.AutoChangingSize = False
 
-def calculateBgAlignmentMode(idA, idB, idC):
-    """
-    Calculates alignment modes using the exact same logic as NSMBW
-    """
-    return 0
 
-
-
-# Sets up the Screen Cap Choice Dialog
 class ScreenCapChoiceDialog(QtWidgets.QDialog):
     """
     Dialog which lets you choose which zone to take a pic of
@@ -11150,650 +11202,6 @@ class AreaChoiceDialog(QtWidgets.QDialog):
         mainLayout.addWidget(self.areaCombo)
         mainLayout.addWidget(buttonBox)
         self.setLayout(mainLayout)
-        
-class ReggieRibbon(QRibbon):
-    """
-    Class that represents Reggie's ribbon
-    """
-    def __init__(self):
-        """
-        Creates and initializes the Reggie Ribbon
-        """
-        QRibbon.__init__(self)
-
-        # Set up the file menu
-        self.fileMenu = ReggieRibbonFileMenu()
-        self.setFileMenu(self.fileMenu)
-        self.setFileTitle(trans.string('Ribbon', 23))
-
-        # Add tabs
-        self.btns = {}
-        self.addHomeTab()
-        self.addActionsTab()
-        self.addViewTab()
-
-        # Add the Help Menu
-        m = mainWindow.SetupHelpMenu()
-        self.setHelpMenu(m)
-        self.setHelpIcon(GetIcon('help'))
-
-        # Stylize on Windows
-        self.stylizeOnWindows(mainWindow)
-
-        global theme
-
-
-    def addHomeTab(self):
-        """
-        Adds the Home Tab
-        """
-        tab = self.addTab(trans.string('Ribbon', 0)) # "Home"
-        self.homeTab = tab
-
-        gi, ts, mw, qk = GetIcon, trans.string, mainWindow, QtGui.QKeySequence
-
-        # Clipboard Section
-        cSection = tab.addSection(ts('Ribbon', 5)) # "Clipboard"
-        a = cSection.addFullButton(gi('paste', True), ts('MenuItems', 30), mw.Paste, qk.Paste, ts('MenuItems', 31))
-        b = cSection.addSmallButton(gi('cut'),   ts('MenuItems', 26), mw.Cut,   qk.Cut,   ts('MenuItems', 27))
-        c = cSection.addSmallButton(gi('copy'),  ts('MenuItems', 28), mw.Copy,  qk.Copy,  ts('MenuItems', 29))
-        self.btns['paste'], self.btns['cut'], self.btns['copy'] = a, b, c
-        self.btns['cut'].setEnabled(False)
-        self.btns['copy'].setEnabled(False)
-
-        # Freeze Section
-        fSection = tab.addSection(ts('Ribbon', 6)) # "Freeze"
-        a = fSection.addSmallToggleButton(gi('objectsfreeze'),   None, mw.HandleObjectsFreeze,   'Ctrl+Shift+1', ts('MenuItems', 39))
-        b = fSection.addSmallToggleButton(gi('spritesfreeze'),   None, mw.HandleSpritesFreeze,   'Ctrl+Shift+2', ts('MenuItems', 41))
-        c = fSection.addSmallToggleButton(gi('entrancesfreeze'), None, mw.HandleEntrancesFreeze, 'Ctrl+Shift+3', ts('MenuItems', 43))
-        d = fSection.addSmallToggleButton(gi('locationsfreeze'), None, mw.HandleLocationsFreeze, 'Ctrl+Shift+4', ts('MenuItems', 45))
-        e = fSection.addSmallToggleButton(gi('pathsfreeze'),     None, mw.HandlePathsFreeze,     'Ctrl+Shift+5', ts('MenuItems', 47))
-        f = fSection.addSmallToggleButton(gi('commentsfreeze'),  None, mw.HandleCommentsFreeze,  'Ctrl+Shift+9', ts('MenuItems', 115))
-        self.btns['objfrz'], self.btns['sprfrz'], self.btns['entfrz'], self.btns['locfrz'], self.btns['pthfrz'], self.btns['comfrz'] = a, b, c, d, e, f
-
-        # Area Section
-        aSection = tab.addSection(ts('Ribbon', 8)) # "Area"
-        #a = aSection.addCustomWidget(self.AreaMenuButton())
-        b = aSection.addFullButton(gi('area', True), ts('MenuItems', 72), mw.HandleAreaOptions, 'Ctrl+Alt+A', ts('MenuItems', 73))
-        #self.btns['areasel'], self.btns['areaset'] = a, b
-            ##        LGroup.addButton(mainWindow.HandleAreaOptions, 'Ctrl+Alt+A', trans.string('MenuItems', 73), True, 'area', trans.string('MenuItems', 72))
-
-        # Set the toggle buttons to their default positions
-        self.btns['objfrz'].setChecked(ObjectsFrozen)
-        self.btns['sprfrz'].setChecked(SpritesFrozen)
-        self.btns['entfrz'].setChecked(EntrancesFrozen)
-        self.btns['locfrz'].setChecked(LocationsFrozen)
-        self.btns['pthfrz'].setChecked(PathsFrozen)
-        self.btns['comfrz'].setChecked(CommentsFrozen)
-
-        return
-
-
-    def addActionsTab(self):
-        """
-        Adds the Actions Tab
-        """
-        tab = self.addTab(trans.string('Ribbon', 1)) # "Actions"
-        self.actionsTab = tab
-
-        gi, ts, mw, qk = GetIcon, trans.string, mainWindow, QtGui.QKeySequence
-
-        return
-
-    def addViewTab(self):
-        """
-        Adds the View Tab
-        """
-        tab = self.addTab(trans.string('Ribbon', 2)) # "View"
-        self.viewTab = tab
-
-        gi, ts, mw, qk = GetIcon, trans.string, mainWindow, QtGui.QKeySequence
-
-        # Layers
-        LSection = tab.addSection(ts('Ribbon', 14)) # "Layers"
-        a = LSection.addFullToggleButton(gi('layer0', True), ts('MenuItems', 48), mw.HandleUpdateLayer0, 'Ctrl+1', ts('MenuItems', 49))
-        b = LSection.addFullToggleButton(gi('layer1', True), ts('MenuItems', 50), mw.HandleUpdateLayer1, 'Ctrl+2', ts('MenuItems', 51))
-        c = LSection.addFullToggleButton(gi('layer2', True), ts('MenuItems', 52), mw.HandleUpdateLayer2, 'Ctrl+3', ts('MenuItems', 53))
-        self.btns['lay0'], self.btns['lay1'], self.btns['lay2'] = a, b, c
-
-        # Tilesets
-        tSection = tab.addSection(ts('Ribbon', 13)) # "Tilesets"
-        a = tSection.addSmallToggleButton(gi('animation'),  ts('MenuItems', 108), mw.HandleTilesetAnimToggle, 'Ctrl+7', ts('MenuItems', 109))
-        b = tSection.addSmallToggleButton(gi('collisions'), ts('MenuItems', 110), mw.HandleCollisionsToggle,  'Ctrl+8', ts('MenuItems', 111))
-        self.btns['anim'], self.btns['colls'] = a, b
-
-        # Visibility
-        vSection = tab.addSection(ts('Ribbon', 15)) # "Visibility"
-        a = vSection.addSmallToggleButton(gi('sprites'),    ts('MenuItems', 54),  mw.HandleSpritesVisibility,   'Ctrl+4', ts('MenuItems', 55))
-        b = vSection.addSmallToggleButton(gi('sprites'),    ts('MenuItems', 56),  mw.HandleSpriteImages,        'Ctrl+6', ts('MenuItems', 57))
-        c = vSection.addSmallToggleButton(gi('locations'),  ts('MenuItems', 58),  mw.HandleLocationsVisibility, 'Ctrl+5', ts('MenuItems', 59))
-        d = vSection.addSmallToggleButton(gi('comments'),   ts('MenuItems', 116), mw.HandleCommentsVisibility,  'Ctrl+0', ts('MenuItems', 117))
-        e = vSection.addSmallToggleButton(gi('realview'),   ts('MenuItems', 118), mw.HandleRealViewToggle,  'Ctrl+9', ts('MenuItems', 119))
-        f = vSection.addFullButton(       gi('grid', True), ts('MenuItems', 60),  mw.HandleSwitchGrid,          'Ctrl+G', ts('MenuItems', 61))
-        self.btns['showsprites'], self.btns['showspriteimgs'], self.btns['showlocs'], self.btns['showcoms'], self.btns['realview'], self.btns['grid'] = a, b, c, d, e, f
-
-        # Set the toggle buttons to their default start values
-        self.btns['lay0'].setChecked(Layer0Shown)
-        self.btns['lay1'].setChecked(Layer1Shown)
-        self.btns['lay2'].setChecked(Layer2Shown)
-        self.btns['showsprites'].setChecked(SpritesShown)
-        self.btns['showspriteimgs'].setChecked(SpriteImagesShown)
-        self.btns['showlocs'].setChecked(LocationsShown)
-        self.btns['showcoms'].setChecked(CommentsShown)
-        self.btns['realview'].setChecked(RealViewEnabled)
-
-        return
-
-    def addOverview(self, dock, act):
-        """
-        Adds the Show/Hide Overview action to the ribbon
-        """
-        return
-        self.oDock = dock
-        self.dockGroup = RibbonGroup(trans.string('Ribbon', 17))
-        self.overBtn = self.dockGroup.addButton(self.HandleOverviewClick, act.shortcut(), trans.string('MenuItems', 95), True, 'overview', trans.string('MenuItems', 94), True, True)
-
-    def addPalette(self, dock, act):
-        """
-        Adds the Show/Hide Palette action to the ribbon
-        """
-        return
-        self.pDock = dock
-        self.palBtn = self.dockGroup.addButton(self.HandlePaletteClick, act.shortcut(), trans.string('MenuItems', 97), True, 'palette', trans.string('MenuItems', 96), True, True)
-
-    def addIslandGen(self, dock, act):
-        """
-        Adds the Show/Hide Island Generator action to the ribbon
-        """
-        return
-        self.iDock = dock
-        self.genBtn = self.dockGroup.addButton(self.HandleIslandGenClick, act.shortcut(), trans.string('MenuItems', 101), True, 'islandgen', trans.string('MenuItems', 100), True, True)
-        self.viewTab.addGroup(self.dockGroup)
-        self.viewTab.finish()
-
-    @QtCore.pyqtSlot(bool)
-    def HandleOverviewClick(self, checked = None):
-        """
-        Updates the overview btn
-        """
-        return
-        visible = checked if checked is not None else not self.oDock.isVisible()
-        self.oDock.setVisible(visible)
-        if checked is None: self.overBtn.setChecked(visible)
-
-    @QtCore.pyqtSlot(bool)
-    def HandlePaletteClick(self, checked = None):
-        """
-        Updates the palette btn
-        """
-        return
-        visible = checked if checked is not None else not self.pDock.isVisible()
-        self.pDock.setVisible(visible)
-        if checked is None: self.palBtn.setChecked(visible)
-
-    @QtCore.pyqtSlot(bool)
-    def HandleIslandGenClick(self, checked = None):
-        """
-        Updates the island generator btn
-        """
-        return
-        visible = checked if checked is not None else not self.iDock.isVisible()
-        self.iDock.setVisible(visible)
-        if checked is None: self.genBtn.setChecked(visible)
-
-    def updateAreaComboBox(self, areas, area):
-        """
-        Updates the Area Combo Box
-        """
-        return
-        self.homeTab.areaComboBox.clear()
-        for i in range(1, len(Level.areas) + 1):
-            self.homeTab.areaComboBox.addItem(trans.string('AreaCombobox', 0, '[num]', i))
-        self.homeTab.areaComboBox.setCurrentIndex(area-1)
-
-    def setBtnEnabled(self, btn, enabled):
-        """
-        Enables or disables a button
-        """
-        try: self.btns[btn].setEnabled(enabled)
-        except Exception: print('Ribbon enabling error: ' + btn + ', ' + str(enabled))
-
-
-class ReggieRibbonFileMenu(QFileMenu):
-    """
-    Widget that represents the file menu for the ribbon
-    """
-    def __init__(self):
-        """
-        Creates and initializes the menu
-        """
-        QFileMenu.__init__(self)
-        self.setRecentFilesText('Recent levels')
-        self.btns = {}
-
-        # Add a recent files manager
-        self.recentFilesMgr = QRecentFilesManager(setting('RecentFiles'))
-        self.setRecentFilesManager(self.recentFilesMgr)
-        self.recentFileClicked.connect(self.handleRecentFileClicked)
-
-        # Get ready to add buttons
-        gi, ts, mw, qk = GetIcon, trans.string, mainWindow, QtGui.QKeySequence
-
-        # Create right-side panels
-        openPanel = QFileMenuPanel('Open an existing level')
-        a = openPanel.addButton(gi('open',         True), ts('MenuItems', 2),  mw.HandleOpenFromName, qk.Open,        ts('MenuItems', 3))
-        b = openPanel.addButton(gi('openfromfile', True), ts('MenuItems', 4),  mw.HandleOpenFromFile, 'Ctrl+Shift+O', ts('MenuItems', 5))
-        self.btns['openname2'], self.btns['openfile'] = a, b
-
-        # Add left-side buttons
-        a = self.addButton(                gi('new', True),    ts('MenuItems', 0),   mw.HandleNewLevel,     qk.New,             ts('MenuItems', 1))
-        b = self.addArrowButton(openPanel, gi('open', True),   ts('MenuItems', 112), mw.HandleOpenFromName, None,               ts('MenuItems', 3))
-        c = self.addButton(                gi('save', True),   ts('MenuItems', 8),   mw.HandleSave,         qk.Save,            ts('MenuItems', 9))
-        d = self.addButton(                gi('saveas', True), ts('MenuItems', 10),  mw.HandleSaveAs,       qk.SaveAs,          ts('MenuItems', 11))
-        self.btns['new'], self.btns['openname1'], self.btns['save'], self.btns['saveas'] = a, b, c, d
-        self.addSeparator()
-        a = self.addButton(gi('info', True),     trans.string('MenuItems', 12), mw.HandleInfo,        'Ctrl+Alt+I', trans.string('MenuItems', 13))
-        b = self.addButton(gi('settings', True), trans.string('MenuItems', 18), mw.HandlePreferences, 'Ctrl+Alt+P', trans.string('MenuItems', 19))
-        self.addSeparator()
-        c = self.addButton(gi('delete', True), trans.string('MenuItems', 20), mw.HandleExit, qk.Quit, trans.string('MenuItems', 21))
-        self.btns['lvlinfo'], self.btns['prefs'], self.btns['exit'] = a, b, c
-
-    def handleRecentFileClicked(self, path):
-        """
-        Handles recent files being clicked
-        """
-        mainWindow.LoadLevel(None, str(path), True, 1)
-
-
-
-class InfoPreviewWidget(QtWidgets.QWidget):
-    """
-    Widget that shows a preview of the level metadata info - available in vertical & horizontal flavors
-    """
-    def __init__(self, direction):
-        """
-        Creates and initializes the widget
-        """
-        QtWidgets.QWidget.__init__(self)
-        self.direction = direction
-
-        self.Label1 = QtWidgets.QLabel('')
-        if self.direction == Qt.Horizontal: self.Label2 = QtWidgets.QLabel('')
-        self.updateLabels()
-
-        self.mainLayout = QtWidgets.QHBoxLayout()
-        self.mainLayout.addWidget(self.Label1)
-        if self.direction == Qt.Horizontal: self.mainLayout.addWidget(self.Label2)
-        self.setLayout(self.mainLayout)
-
-        if self.direction == Qt.Horizontal: self.setMinimumWidth(256)
-
-    def updateLabels(self):
-        """
-        Updates the widget labels
-        """
-        if ('Area' not in globals()) or not hasattr(Area, 'filename'): # can't get level metadata if there's no level
-            self.Label1.setText('')
-            if self.direction == Qt.Horizontal: self.Label2.setText('')
-            return
-
-        a = [ # MUST be a list, not a tuple
-            mainWindow.fileTitle,
-            Area.Title,
-            trans.string('InfoDlg', 8, '[name]', Area.Creator),
-            trans.string('InfoDlg', 5) + ' ' + Area.Author,
-            trans.string('InfoDlg', 6) + ' ' + Area.Group,
-            trans.string('InfoDlg', 7) + ' ' + Area.Webpage,
-            ]
-
-        for b, section in enumerate(a): # cut off excessively long strings
-            if self.direction == Qt.Vertical: short = clipStr(section, 128)
-            else: short = clipStr(section, 184)
-            if short is not None: a[b] = short + '...'
-
-        if self.direction == Qt.Vertical:
-            str1 = a[0]+'<br>'+a[1]+'<br>'+a[2]+'<br>'+a[3]+'<br>'+a[4]+'<br>'+a[5]
-            self.Label1.setText(str1)
-        else:
-            str1 = a[0]+'<br>'+a[1]+'<br>'+a[2]
-            str2 = a[3]+'<br>'+a[4]+'<br>'+a[5]
-            self.Label1.setText(str1)
-            self.Label2.setText(str2)
-
-        self.update()
-        
-def clipStr(text, idealWidth, font=None):
-    """
-    Returns a shortened string, or None if it need not be shortened
-    """
-    if font is None: font = QtGui.QFont()
-    width = QtGui.QFontMetrics(font).width(text)
-    if width <= idealWidth: return None
-
-    while width > idealWidth:
-        text = text[:-1]
-        width = QtGui.QFontMetrics(font).width(text)
-
-    return text
-
-
-class RecentFilesMenu(QtWidgets.QMenu):
-    """
-    A menu which displays recently opened files
-    """
-    def __init__(self):
-        """
-        Creates and initializes the menu
-        """
-        QtWidgets.QMenu.__init__(self)
-        self.setMinimumWidth(192)
-
-        # Here's how this works:
-        # - Upon startup, RecentFiles is obtained from QSettings and put into self.FileList
-        # - All modifications to the menu thereafter are then applied to self.FileList
-        # - The actions displayed in the menu are determined by whatever's in self.FileList
-        # - Whenever self.FileList is changed, self.writeSettings is called which writes
-        #      it all back to the QSettings
-
-        # Populate FileList upon startup
-        if settings.contains('RecentFiles'):
-            self.FileList = str(setting('RecentFiles')).split('|')
-        else:
-            self.FileList = ['']
-
-        # This fixes bugs
-        self.FileList = [path for path in self.FileList if path.lower() not in ('', 'none', 'false', 'true')]
-
-        self.updateActionList()
-
-
-    def writeSettings(self):
-        """
-        Writes FileList back to the Registry
-        """
-        setSetting('RecentFiles', str('|'.join(self.FileList)))
-
-    def updateActionList(self):
-        """
-        Updates the actions visible in the menu
-        """
-
-        self.clear() # removes any actions already in the menu
-        ico = GetIcon('new')
-        currentShortcut = 0
-
-        for i, filename in enumerate(self.FileList):
-            filename = filename.split('\\')[-1]
-            short = clipStr(filename, 72)
-            if short is not None: filename = short + '...'
-
-            act = QtWidgets.QAction(ico, filename, self)
-            if i <=9: act.setShortcut(QtGui.QKeySequence('Ctrl+Alt+'+str(i)))
-            act.setToolTip(str(self.FileList[i]))
-
-            # This is a TERRIBLE way to do this, but I can't think of anything simpler. :(
-            if i == 0:  handler = self.HandleOpenRecentFile0
-            if i == 1:  handler = self.HandleOpenRecentFile1
-            if i == 2:  handler = self.HandleOpenRecentFile2
-            if i == 3:  handler = self.HandleOpenRecentFile3
-            if i == 4:  handler = self.HandleOpenRecentFile4
-            if i == 5:  handler = self.HandleOpenRecentFile5
-            if i == 6:  handler = self.HandleOpenRecentFile6
-            if i == 7:  handler = self.HandleOpenRecentFile7
-            if i == 8:  handler = self.HandleOpenRecentFile8
-            if i == 9:  handler = self.HandleOpenRecentFile9
-            if i == 10: handler = self.HandleOpenRecentFile10
-            if i == 11: handler = self.HandleOpenRecentFile11
-            if i == 12: handler = self.HandleOpenRecentFile12
-            if i == 13: handler = self.HandleOpenRecentFile13
-            if i == 14: handler = self.HandleOpenRecentFile14
-            act.triggered.connect(handler)
-
-            self.addAction(act)
-
-    def AddToList(self, path):
-        """
-        Adds an entry to the list
-        """
-        MaxLength = 16
-
-        if path in ('None', 'True', 'False', None, True, False): return # fixes bugs
-        path = str(path).replace('/', '\\')
-
-        new = [path]
-        for filename in self.FileList:
-            if filename != path:
-                new.append(filename)
-        if len(new) > MaxLength: new = new[0:MaxLength]
-
-        self.FileList = new
-        self.writeSettings()
-        self.updateActionList()
-
-    def RemoveFromList(self, index):
-        """
-        Removes an entry from the list
-        """
-        del self.FileList[index]
-        self.writeSettings()
-        self.updateActionList()
-
-    def clearAll(self):
-        """
-        Clears all recent files from the list and the registry
-        """
-        self.FileList = []
-        self.writeSettings()
-        self.updateActionList()
-
-    def HandleOpenRecentFile0(self):
-        self.HandleOpenRecentFile(0)
-    def HandleOpenRecentFile1(self):
-        self.HandleOpenRecentFile(1)
-    def HandleOpenRecentFile2(self):
-        self.HandleOpenRecentFile(2)
-    def HandleOpenRecentFile3(self):
-        self.HandleOpenRecentFile(3)
-    def HandleOpenRecentFile4(self):
-        self.HandleOpenRecentFile(4)
-    def HandleOpenRecentFile5(self):
-        self.HandleOpenRecentFile(5)
-    def HandleOpenRecentFile6(self):
-        self.HandleOpenRecentFile(6)
-    def HandleOpenRecentFile7(self):
-        self.HandleOpenRecentFile(7)
-    def HandleOpenRecentFile8(self):
-        self.HandleOpenRecentFile(8)
-    def HandleOpenRecentFile9(self):
-        self.HandleOpenRecentFile(9)
-    def HandleOpenRecentFile10(self):
-        self.HandleOpenRecentFile(10)
-    def HandleOpenRecentFile11(self):
-        self.HandleOpenRecentFile(11)
-    def HandleOpenRecentFile12(self):
-        self.HandleOpenRecentFile(12)
-    def HandleOpenRecentFile13(self):
-        self.HandleOpenRecentFile(13)
-    def HandleOpenRecentFile14(self):
-        self.HandleOpenRecentFile(14)
-    def HandleOpenRecentFile(self, number):
-        """
-        Open a recently opened level picked from the main menu
-        """
-        if mainWindow.CheckDirty(): return
-
-        if not mainWindow.LoadLevel(None, self.FileList[number], True, 1): self.RemoveFromList(number)
-
-
-class ZoomWidget(QtWidgets.QWidget):
-    """
-    Widget that allows easy zoom level control
-    """
-    def __init__(self):
-        """
-        Creates and initializes the widget
-        """
-        QtWidgets.QWidget.__init__(self)
-        maxwidth = 512-128
-        maxheight = 20
-
-        self.slider = QtWidgets.QSlider(Qt.Horizontal)
-        self.minLabel = QtWidgets.QPushButton()
-        self.minusLabel = QtWidgets.QPushButton()
-        self.plusLabel = QtWidgets.QPushButton()
-        self.maxLabel = QtWidgets.QPushButton()
-
-        self.slider.setMaximumHeight(maxheight)
-        self.slider.setMinimum(0)
-        self.slider.setMaximum(len(mainWindow.ZoomLevels)-1)
-        self.slider.setTickInterval(2)
-        self.slider.setTickPosition(self.slider.TicksAbove)
-        self.slider.setPageStep(1)
-        self.slider.setTracking(True)
-        self.slider.setSliderPosition(self.findIndexOfLevel(100))
-        self.slider.valueChanged.connect(self.sliderMoved)
-
-        self.minLabel.setIcon(GetIcon('zoommin'))
-        self.minusLabel.setIcon(GetIcon('zoomout'))
-        self.plusLabel.setIcon(GetIcon('zoomin'))
-        self.maxLabel.setIcon(GetIcon('zoommax'))
-        self.minLabel.setFlat(True)
-        self.minusLabel.setFlat(True)
-        self.plusLabel.setFlat(True)
-        self.maxLabel.setFlat(True)
-        self.minLabel.clicked.connect(mainWindow.HandleZoomMin)
-        self.minusLabel.clicked.connect(mainWindow.HandleZoomOut)
-        self.plusLabel.clicked.connect(mainWindow.HandleZoomIn)
-        self.maxLabel.clicked.connect(mainWindow.HandleZoomMax)
-
-        self.layout = QtWidgets.QGridLayout()
-        self.layout.addWidget(self.minLabel,   0, 0)
-        self.layout.addWidget(self.minusLabel, 0, 1)
-        self.layout.addWidget(self.slider,     0, 2)
-        self.layout.addWidget(self.plusLabel,  0, 3)
-        self.layout.addWidget(self.maxLabel,   0, 4)
-        self.layout.setVerticalSpacing(0)
-        self.layout.setHorizontalSpacing(0)
-        self.layout.setContentsMargins(0,0,4,0)
-
-        self.setLayout(self.layout)
-        self.setMinimumWidth(maxwidth)
-        self.setMaximumWidth(maxwidth)
-        self.setMaximumHeight(maxheight)
-
-    def sliderMoved(self):
-        """
-        Handle the slider being moved
-        """
-        mainWindow.ZoomTo(mainWindow.ZoomLevels[self.slider.value()])
-
-    def setZoomLevel(self, newLevel):
-        """
-        Moves the slider to the zoom level given
-        """
-        self.slider.setSliderPosition(self.findIndexOfLevel(newLevel))
-
-    def findIndexOfLevel(self, level):
-        for i, mainlevel in enumerate(mainWindow.ZoomLevels):
-            if float(mainlevel) == float(level): return i
-
-
-class ZoomStatusWidget(QtWidgets.QWidget):
-    """
-    Shows the current zoom level, in percent
-    """
-    def __init__(self):
-        """
-        Creates and initializes the widget
-        """
-        QtWidgets.QWidget.__init__(self)
-        self.label = QtWidgets.QPushButton('100%')
-        self.label.setFlat(True)
-        self.label.clicked.connect(mainWindow.HandleZoomActual)
-
-        self.layout = QtWidgets.QHBoxLayout()
-        self.layout.addWidget(self.label)
-        self.layout.setContentsMargins(4,0,8,0)
-        self.setMaximumWidth(56)
-
-        self.setLayout(self.layout)
-
-    def setZoomLevel(self, zoomLevel):
-        """
-        Updates the widget
-        """
-        if float(int(zoomLevel)) == float(zoomLevel):
-            self.label.setText(str(int(zoomLevel))+'%')
-        else:
-            self.label.setText(str(float(zoomLevel))+'%')
-
-
-
-def LoadActionsLists():
-    # Define the menu items, their default settings and their mainWindow.actions keys
-    # These are used both in the Preferences Dialog and when init'ing the toolbar.
-    global FileActions
-    global EditActions
-    global ViewActions
-    global SettingsActions
-    global HelpActions
-
-    FileActions = (
-        (trans.string('MenuItems', 0),  True,  'newlevel'),
-        (trans.string('MenuItems', 2),  True,  'openfromname'),
-        (trans.string('MenuItems', 4),  False, 'openfromfile'),
-        (trans.string('MenuItems', 6),  False, 'openrecent'),
-        (trans.string('MenuItems', 8),  True,  'save'),
-        (trans.string('MenuItems', 10), False, 'saveas'),
-        (trans.string('MenuItems', 12), False, 'metainfo'),
-        (trans.string('MenuItems', 14), True,  'screenshot'),
-        (trans.string('MenuItems', 16), False, 'changegamepath'),
-        (trans.string('MenuItems', 18), False, 'preferences'),
-        (trans.string('MenuItems', 20), False, 'exit'),
-        )
-    EditActions = (
-        (trans.string('MenuItems', 22), False, 'selectall'),
-        (trans.string('MenuItems', 24), False, 'deselect'),
-        (trans.string('MenuItems', 26), True,  'cut'),
-        (trans.string('MenuItems', 28), True,  'copy'),
-        (trans.string('MenuItems', 30), True,  'paste'),
-        (trans.string('MenuItems', 32), False, 'shiftitems'),
-        (trans.string('MenuItems', 34), False, 'mergelocations'),
-        (trans.string('MenuItems', 38), False, 'freezeobjects'),
-        (trans.string('MenuItems', 40), False, 'freezesprites'),
-        (trans.string('MenuItems', 42), False, 'freezeentrances'),
-        (trans.string('MenuItems', 44), False, 'freezelocations'),
-        (trans.string('MenuItems', 46), False, 'freezepaths'),
-        )
-    ViewActions = (
-        (trans.string('MenuItems', 48), True,  'showlay0'),
-        (trans.string('MenuItems', 50), True,  'showlay1'),
-        (trans.string('MenuItems', 52), True,  'showlay2'),
-        (trans.string('MenuItems', 54), True,  'showsprites'),
-        (trans.string('MenuItems', 56), False, 'showspriteimages'),
-        (trans.string('MenuItems', 58), True,  'showlocations'),
-        (trans.string('MenuItems', 60), True,  'grid'),
-        (trans.string('MenuItems', 62), True,  'zoommax'),
-        (trans.string('MenuItems', 64), True,  'zoomin'),
-        (trans.string('MenuItems', 66), True,  'zoomactual'),
-        (trans.string('MenuItems', 68), True,  'zoomout'),
-        (trans.string('MenuItems', 70), True,  'zoommin'),
-        )
-    SettingsActions = (
-        (trans.string('MenuItems', 72), True, 'areaoptions'),
-        (trans.string('MenuItems', 74), True, 'zones'),
-        (trans.string('MenuItems', 76), True, 'backgrounds'),
-        (trans.string('MenuItems', 78), False, 'addarea'),
-        (trans.string('MenuItems', 80), False, 'importarea'),
-        (trans.string('MenuItems', 82), False, 'deletearea'),
-        (trans.string('MenuItems', 84), False, 'reloadgfx'),
-        )
-    HelpActions = (
-        (trans.string('MenuItems', 86), False, 'infobox'),
-        (trans.string('MenuItems', 88), False, 'helpbox'),
-        (trans.string('MenuItems', 90), False, 'tipbox'),
-        (trans.string('MenuItems', 92), False, 'aboutqt'),
-        )
 
 
 class PreferencesDialog(QtWidgets.QDialog):
@@ -12440,32 +11848,576 @@ class UpdateDialog(QtWidgets.QDialog):
             self.done.emit()
 
 
+#####################################################################
+############################### STAMP ###############################
+#####################################################################
 
-class ListWidgetWithToolTipSignal(QtWidgets.QListWidget):
+class Stamp():
     """
-    A QtWidgets.QListWidget that includes a signal that
-    is emitted when a tooltip is about to be shown. Useful
-    for making tooltips that update every time you show
-    them.
+    Class that represents a stamp in the list
     """
-    toolTipAboutToShow = QtCore.pyqtSignal(QtWidgets.QListWidgetItem)
-
-    def viewportEvent(self, e):
+    def __init__(self, ReggieClip=None, Name=''):
         """
-        Handles viewport events
+        Initializes the stamp
         """
-        if e.type() == e.ToolTip:
-            self.toolTipAboutToShow.emit(self.itemFromIndex(self.indexAt(e.pos())))
 
-        return super().viewportEvent(e)
+        self.ReggieClip = ReggieClip
+        self.Name = Name
+        self.Icon = self.render()
+
+    def renderPreview(self):
+        """
+        Renders the stamp preview
+        """
+
+        minX, minY, maxX, maxY = 24576, 12288, 0, 0
+
+        layers, sprites = mainWindow.getEncodedObjects(self.ReggieClip)
+
+        # Go through the sprites and find the maxs and mins
+        for spr in sprites:
+
+            br = spr.getFullRect()
+
+            x1 = br.topLeft().x()
+            y1 = br.topLeft().y()
+            x2 = x1 + br.width()
+            y2 = y1 + br.height()
+
+            if x1 < minX: minX = x1
+            if x2 > maxX: maxX = x2
+            if y1 < minY: minY = y1
+            if y2 > maxY: maxY = y2
+
+        # Go through the objects and find the maxs and mins
+        for layer in layers:
+            for obj in layer:
+                x1 = (obj.objx * TileWidth)
+                x2 = x1 + (obj.width * TileWidth)
+                y1 = (obj.objy * TileWidth)
+                y2 = y1 + (obj.height * TileWidth)
+
+                if x1 < minX: minX = x1
+                if x2 > maxX: maxX = x2
+                if y1 < minY: minY = y1
+                if y2 > maxY: maxY = y2
+
+        # Calculate offset amounts (snap to TileWidthxTileWidth increments)
+        offsetX = int(minX // TileWidth) * TileWidth
+        offsetY = int(minY // TileWidth) * TileWidth
+        drawOffsetX = offsetX - minX
+        drawOffsetY = offsetY - minY
+
+        # Go through the things again and shift them by the offset amount
+        for spr in sprites:
+            spr.objx -= offsetX / TileWidth / 16
+            spr.objy -= offsetY / TileWidth / 16
+        for layer in layers:
+            for obj in layer:
+                obj.objx -= offsetX // TileWidth
+                obj.objy -= offsetY // TileWidth
+
+        # Calculate the required pixmap size
+        pixmapSize = (maxX - minX, maxY - minY)
+
+        # Create the pixmap, and a painter
+        pix = QtGui.QPixmap(pixmapSize[0], pixmapSize[1])
+        pix.fill(Qt.transparent)
+        painter = QtGui.QPainter(pix)
+        painter.setRenderHint(painter.Antialiasing)
+
+        # Paint all objects
+        objw, objh = int(pixmapSize[0] // TileWidth) + 1, int(pixmapSize[1] // TileWidth) + 1
+        for layer in reversed(layers):
+            tmap = []
+            for i in range(objh):
+                tmap.append([-1] * objw)
+            for obj in layer:
+                startx = int(obj.objx)
+                starty = int(obj.objy)
+
+                desty = starty
+                for row in obj.objdata:
+                    destrow = tmap[desty]
+                    destx = startx
+                    for tile in row:
+                        if tile > 0:
+                            destrow[destx] = tile
+                        destx += 1
+                    desty += 1
+
+                painter.save()
+                desty = 0
+                for row in tmap:
+                    destx = 0
+                    for tile in row:
+                        if tile > 0:
+                            if Tiles[tile] is None: continue
+                            r = Tiles[tile].main
+                            if r is None: continue
+                            painter.drawPixmap(destx + drawOffsetX, desty + drawOffsetY, r)
+                        destx += TileWidth
+                    desty += TileWidth
+                painter.restore()
+
+        # Paint all sprites
+        for spr in sprites:
+            offx = ((spr.objx + spr.ImageObj.xOffset) * TileWidth / 16) + drawOffsetX
+            offy = ((spr.objy + spr.ImageObj.yOffset) * TileWidth / 16) + drawOffsetY
+
+            painter.save()
+            painter.translate(offx, offy)
+
+            spr.paint(painter, None, None, True)
+
+            painter.restore()
+
+            # Paint any auxiliary things
+            for aux in spr.ImageObj.aux:
+                painter.save()
+                painter.translate(
+                    offx + aux.x(),
+                    offy + aux.y(),
+                    )
+
+                aux.paint(painter, None, None)
+
+                painter.restore()
+
+        # End painting
+        painter.end()
+        del painter
+
+        # Scale it
+        maxW, maxH = 96, 96
+        w, h = pix.width(), pix.height()
+        if w > h and w > maxW:
+            pix = pix.scaledToWidth(maxW)
+        elif h > w and h > maxH:
+            pix = pix.scaledToHeight(maxH)
+
+        # Return it
+        return pix
+
+    def render(self):
+        """
+        Renders the stamp icon, preview AND text
+        """
+
+        # Get the preview icon
+        prevIcon = self.renderPreview()
+
+        # Calculate the total size of the icon
+        textSize = self.calculateTextSize(self.Name)
+        totalWidth = max(prevIcon.width(), textSize.width())
+        totalHeight = prevIcon.height() + 2 + textSize.height()
+
+        # Make a pixmap and painter
+        pix = QtGui.QPixmap(totalWidth, totalHeight)
+        pix.fill(Qt.transparent)
+        painter = QtGui.QPainter(pix)
+
+        # Draw the preview
+        iconWidth = prevIcon.width()
+        iconXOffset = (totalWidth - prevIcon.width()) / 2
+        painter.drawPixmap(iconXOffset, 0, prevIcon)
+
+        # Draw the text
+        textRect = QtCore.QRectF(0, prevIcon.height() + 2, totalWidth, textSize.height())
+        painter.setFont(QtGui.QFont())
+        painter.drawText(textRect, Qt.AlignTop | Qt.TextWordWrap, self.Name)
+
+        # Return the pixmap
+        return pix
+
+    @staticmethod
+    def calculateTextSize(text):
+        """
+        Calculates the size of text. Crops to 96 pixels wide.
+        """
+        fontMetrics = QtGui.QFontMetrics(QtGui.QFont())
+        fontRect = fontMetrics.boundingRect(QtCore.QRect(0, 0, 96, 48), Qt.TextWordWrap, text)
+        w, h = fontRect.width(), fontRect.height()
+        return QtCore.QSizeF(min(w, 96), h)
+
+    def update(self):
+        """
+        Updates the stamp icon
+        """
+        self.Icon = self.render()
 
 
+class StampListModel(QtCore.QAbstractListModel):
+    """
+    Model containing all the stamps
+    """
 
-####################################################################
-####################################################################
-####################################################################
+    def __init__(self):
+        """
+        Initializes the model
+        """
+        QtCore.QAbstractListModel.__init__(self)
+
+        self.items = [] # list of Stamp objects
+
+    def rowCount(self, parent=None):
+        """
+        Required by Qt
+        """
+        return len(self.items)
+
+    def data(self, index, role=Qt.DisplayRole):
+        """
+        Get what we have for a specific row
+        """
+        if not index.isValid(): return None
+        n = index.row()
+        if n < 0: return None
+        if n >= len(self.items): return None
+
+        if role == Qt.DecorationRole:
+            return self.items[n].Icon
+
+        elif role == Qt.BackgroundRole:
+            return QtGui.qApp.palette().base()
+
+        elif role == Qt.UserRole:
+            return self.items[n].Name
+
+        elif role == Qt.StatusTipRole:
+            return self.items[n].Name
+
+        else: return None
+
+    def setData(self, index, value, role=Qt.DisplayRole):
+        """
+        Set data for a specific row
+        """
+        if not index.isValid(): return None
+        n = index.row()
+        if n < 0: return None
+        if n >= len(self.items): return None
+
+        if role == Qt.UserRole:
+            self.items[n].Name = value
+
+    def addStamp(self, stamp):
+        """
+        Adds a stamp
+        """
+
+        # Start resetting
+        self.beginResetModel()
+
+        # Add the stamp to self.items
+        self.items.append(stamp)
+
+        # Finish resetting
+        self.endResetModel()
+
+    def removeStamp(self, stamp):
+        """
+        Removes a stamp
+        """
+
+        # Start resetting
+        self.beginResetModel()
+
+        # Remove the stamp from self.items
+        idx = self.items.index(stamp)
+        self.items.remove(stamp)
+
+        # Finish resetting
+        self.endResetModel()
+
+#####################################################################
+############################# GAME DEFS #############################
+#####################################################################
+
+class ReggieGameDefinition():
+    """
+    A class that defines a NSMBW hack: songs, tilesets, sprites, songs, etc.
+    """
+
+    # Gamedef File - has 2 values: name (str) and patch (bool)
+    class GameDefinitionFile():
+        """
+        A class that defines a filepath, and some options
+        """
+        def __init__(self, path, patch):
+            """
+            Initializes the GameDefinitionFile
+            """
+            self.path = path
+            self.patch = patch
+
+    def __init__(self, name=None):
+        """
+        Initializes the ReggieGameDefinition
+        """
+        self.InitAsEmpty()
+
+        # Try to init it from name if possible
+        NoneTypes = (None, 'None', 0, '', True, False)
+        if name in NoneTypes: return
+        else:
+            try: self.InitFromName(name)
+            except Exception: self.InitAsEmpty() # revert
 
 
+    def InitAsEmpty(self):
+        """
+        Sets all properties to their default values
+        """
+        gdf = self.GameDefinitionFile
+
+        self.custom = False
+        self.base = None # gamedef to use as a base
+        self.gamepath = None
+        self.name = trans.string('Gamedefs', 13) # 'New Super Mario Bros. Wii'
+        self.description = trans.string('Gamedefs', 14) # 'A new Mario adventure!<br>' and the date
+        self.version = '2'
+
+        self.sprites = sprites
+
+        self.files = {
+            'entrancetypes': gdf(None, False),
+            'levelnames': gdf(None, False),
+            'music': gdf(None, False),
+            'spritecategories': gdf(None, False),
+            'spritedata': gdf(None, False),
+            'spritelistdata': gdf(None, False),
+            'spritenames': gdf(None, False),
+            'tilesets': gdf(None, False),
+            'ts1_descriptions': gdf(None, False),
+            }
+        self.folders = {
+            'sprites': gdf(None, False),
+            }
+
+    def InitFromName(self, name):
+        """
+        Attempts to open/load a Game Definition from a name string
+        """
+        raise NotImplementedError
+    
+    def GetGamePath(self):
+        """
+        Returns the game path
+        """
+        if not self.custom: return str(setting('GamePath_NSMBU'))
+        name = 'GamePath_' + self.name
+        setname = setting(name)
+
+        # Use the default if there are no settings for this yet
+        if setname is None: return str(setting('GamePath_NSMBU'))
+        else: return str(setname)
+
+    def SetGamePath(self, path):
+        """
+        Sets the game path
+        """
+        if not self.custom: setSetting('GamePath_NSMBU', path)
+        else:
+            name = 'GamePath_' + self.name
+            setSetting(name, path)
+
+    def GetGamePaths(self):
+        """
+        Returns game paths of this gamedef and its bases
+        """
+        mainpath = str(setting('GamePath_NSMBU'))
+        if not self.custom: return [mainpath,]
+
+        name = 'GamePath_' + self.name
+        stg = setting(name)
+        if self.base is None:
+            return [mainpath, stg]
+        else:
+            paths = self.base.GetGamePaths()
+            paths.append(stg)
+            return paths
+
+
+    def GetLastLevel(self):
+        """
+        Returns the last loaded level
+        """
+        if not self.custom: return setting('LastLevelNSMBUversion')
+        name = 'LastLevel_' + self.name
+        stg = setting(name)
+
+        # Use the default if there are no settings for this yet
+        if stg is None: return setting('LastLevelNSMBUversion')
+        else: return stg
+
+    def SetLastLevel(self, path):
+        """
+        Sets the last loaded level
+        """
+        if path in (None, 'None', 'none', True, 'True', 'true', False, 'False', 'false', 0, 1, ''): return
+        #print('Last loaded level set to ' + str(path))
+        if not self.custom: setSetting('LastLevelNSMBUversion', path)
+        else:
+            name = 'LastLevel_' + self.name
+            setSetting(name, path)
+
+
+    def recursiveFiles(self, name, isPatch=False, folder=False):
+        """
+        Checks each base of this gamedef and returns a list of successive file paths
+        """
+        ListToCheckIn = self.files if not folder else self.folders
+
+        # This can be handled 4 ways: if we do or don't have a base, and if we do or don't have a copy of the file.
+        if self.base is None:
+            if ListToCheckIn[name].path is None: # No base, no file
+
+                if isPatch: return [], True
+                else: return []
+
+            else: # No base, file
+
+                alist = []
+                alist.append(ListToCheckIn[name].path)
+                if isPatch: return alist, ListToCheckIn[name].patch
+                else: return alist
+
+        else:
+
+            if isPatch: listUpToNow, wasPatch = self.base.recursiveFiles(name, True, folder)
+            else: listUpToNow = self.base.recursiveFiles(name, False, folder)
+
+            if ListToCheckIn[name].path is None: # Base, no file
+
+                if isPatch: return listUpToNow, wasPatch
+                else: return listUpToNow
+
+            else: # Base, file
+
+                # If it's a patch, just add it to the end of the list
+                if ListToCheckIn[name].patch: listUpToNow.append(ListToCheckIn[name].path)
+
+                # If it's not (it's free-standing), make a new list and start over
+                else:
+                    newlist = []
+                    newlist.append(ListToCheckIn[name].path)
+                    if isPatch: return newlist, False
+                    else: return newlist
+
+                # Return
+                if isPatch: return listUpToNow, wasPatch
+                else: return listUpToNow
+
+    def multipleRecursiveFiles(self, *args):
+        """
+        Returns multiple recursive files in order of least recent to most recent as a list of tuples, one list per gamedef base
+        """
+
+        # This should be very simple
+        # Each arg should be a file name
+        if self.base is None: main = [] # start a new level
+        else: main = self.base.multipleRecursiveFiles(*args)
+
+        # Add the values from this level, and then return it
+        result = []
+        for name in args:
+            try:
+                file = self.files[name]
+                if file.path is None: raise KeyError
+                result.append(self.files[name])
+            except KeyError: result.append(None)
+        main.append(tuple(result))
+        return main
+
+    def file(self, name):
+        """
+        Returns a file by recursively checking successive gamedef bases
+        """
+        if name not in self.files: return
+
+        if self.files[name].path is not None: return self.files[name].path
+        else:
+            if self.base is None: return
+            return self.base.file(name) # it can recursively check its base, too
+
+    def getImageClasses(self):
+        """
+        Gets all image classes
+        """
+        if not self.custom:
+            return self.sprites.ImageClasses
+
+        if self.base is not None:
+            images = dict(self.base.getImageClasses())
+        else:
+            images = {}
+
+        if hasattr(self.sprites, 'ImageClasses'):
+            images.update(self.sprites.ImageClasses)
+        return images
+
+def GetPath(id_):
+    """
+    Checks the game definition and the translation and returns the appropriate path
+    """
+    global gamedef
+    global trans
+
+    # If there's a custom gamedef, use that
+    if gamedef.custom and gamedef.file(id_) is not None: return gamedef.file(id_)
+    else: return trans.path(id_)
+
+def getMusic():
+    """
+    Uses the current gamedef + translation to get the music data, and returns it as a list of tuples
+    """
+
+    transsong = trans.files['music']
+    gamedefsongs, isPatch = gamedef.recursiveFiles('music', True)
+    if isPatch:
+        paths = [transsong]
+        for path in gamedefsongs: paths.append(path)
+    else: paths = gamedefsongs
+
+    songs = []
+    for path in paths:
+        musicfile = open(path)
+        data = musicfile.read()
+        musicfile.close()
+        del musicfile
+
+        # Split the data
+        data = data.split('\n')
+        while '' in data: data.remove('')
+        for i, line in enumerate(data): data[i] = line.split(':')
+
+        # Apply it
+        for songid, name in data:
+            found = False
+            for song in songs:
+                if song[0] == songid:
+                    song[1] = name
+                    found = True
+            if not found:
+                songs.append([songid, name])
+
+    return sorted(songs, key=lambda song: int(song[0]))
+
+def FindGameDef(name, skip=None):
+    "Helper function to find a game def with a specific name. Skip will be skipped"""
+    toSearch = [None] # Add the original game first
+    for folder in os.listdir('reggiedata/games'): toSearch.append(folder)
+
+    for folder in toSearch:
+        if folder == skip: continue
+        def_ = ReggieGameDefinition(folder)
+        if (not def_.custom) and (folder is not None): continue
+        if def_.name == name: return def_
+
+#####################################################################
+########################### MAIN FUNCTION ###########################
+#####################################################################
 
 class ReggieWindow(QtWidgets.QMainWindow):
     """
@@ -16593,12 +16545,10 @@ def main():
     mainWindow.show()
     app.splashScreen.hide()
     del app.splashScreen
-
     exitcodesys = app.exec_()
     app.deleteLater()
     sys.exit(exitcodesys)
 
-generateStringsXML = False
 if '-generatestringsxml' in sys.argv:
     generateStringsXML = True
 
