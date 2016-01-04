@@ -1,12 +1,12 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 
-# Reggie! - New Super Mario Bros. U Level Editor
-# Version v0.3 ALPHA
-# Copyright (C) 2009-2015 Treeki, Tempus, angelsl, JasonP27, Kamek64,
-# MalStar1000, RoadrunnerWMC, MrRean
+# Reggie! Next - New Super Mario Bros. U Level Editor
+# Version v0.4 ALPHA
+# Copyright (C) 2009-2016 Treeki, Tempus, angelsl, JasonP27, Kinnay,
+# MalStar1000, RoadrunnerWMC, MrRean, Grop
 
-# This file is part of Reggie!.
+# This file is part of Reggie! Next.
 
 # Reggie! is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -211,12 +211,24 @@ class SpriteImage_Goomba(SLib.SpriteImage_Static): # 0
             parent,
             3.75,
             ImageCache['Goomba'],
-            (-8, -8),
             )
 
     @staticmethod
     def loadImages():
         SLib.loadIfNotInImageCache('Goomba', 'goomba.png')
+
+class SpriteImage_Paragoomba(SLib.SpriteImage_Static): # 1
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            ImageCache['Paragoomba'],
+            (-8, -8),
+            )
+
+    @staticmethod
+    def loadImages():
+        SLib.loadIfNotInImageCache('Paragoomba', 'paragoomba.png')
   
 # Image needs to be improved
 class SpriteImage_KoopaTroopa(SLib.SpriteImage_StaticMultiple): # 19
@@ -225,7 +237,7 @@ class SpriteImage_KoopaTroopa(SLib.SpriteImage_StaticMultiple): # 19
             parent,
             3.75,
             ImageCache['KoopaG'],
-            (-8,-16),
+            (-8,-8),
             )
 
     @staticmethod
@@ -330,6 +342,8 @@ class SpriteImage_Coin(SLib.SpriteImage_Static): # 65
             3.75,
             ImageCache['Coin'],
             )
+        self.parent.setZValue(20000)
+
 
 class SpriteImage_HuckitCrab(SLib.SpriteImage_StaticMultiple): # 74
     def __init__(self, parent):
@@ -353,6 +367,7 @@ class SpriteImage_MovingCoin(SLib.SpriteImage_Static): # 87
             3.75,
             ImageCache['Coin'],
             )
+        self.parent.setZValue(20000)
 
 class SpriteImage_QuestionSwitch(SLib.SpriteImage_Static): # 104
     def __init__(self, parent):
@@ -467,6 +482,7 @@ class SpriteImage_CoinOutline(SLib.SpriteImage_StaticMultiple): # 158
             3.75, # native res (3.75*16=60)
             ImageCache['CoinOutlineMultiplayer'],
             )
+        self.parent.setZValue(20000)
 
     @staticmethod
     def loadImages():
@@ -608,8 +624,6 @@ class SpriteImage_Muncher(SLib.SpriteImage_StaticMultiple): # 259
         SLib.loadIfNotInImageCache('MuncherFr', 'muncher_frozen.png')
 
     def dataChanged(self):
-
-        # shiz
         isfrozen = self.parent.spritedata[5] & 1
 
         if isfrozen == 0:
@@ -638,6 +652,7 @@ class SpriteImage_RotationControlledCoin(SLib.SpriteImage_Static): # 325
             3.75,
             ImageCache['Coin'],
             )
+        self.parent.setZValue(20000)
 
 class SpriteImage_MovementControlledCoin(SLib.SpriteImage_Static): # 326
     def __init__(self, parent):
@@ -646,6 +661,7 @@ class SpriteImage_MovementControlledCoin(SLib.SpriteImage_Static): # 326
             3.75,
             ImageCache['Coin'],
             )
+        self.parent.setZValue(20000)
 
 class SpriteImage_BoltControlledCoin(SLib.SpriteImage_Static): # 328
     def __init__(self, parent):
@@ -654,6 +670,7 @@ class SpriteImage_BoltControlledCoin(SLib.SpriteImage_Static): # 328
             3.75,
             ImageCache['Coin'],
             )
+        self.parent.setZValue(20000)
 
 class SpriteImage_WoodenBox(SLib.SpriteImage_StaticMultiple): # 338
     def __init__(self, parent):
@@ -741,10 +758,10 @@ class SpriteImage_Fliprus(SLib.SpriteImage_StaticMultiple): # 441
 
     @staticmethod
     def loadImages():
-        fliprus = SLib.GetImg('fliprus.png', True)
-
-        ImageCache['FliprusL'] = QtGui.QPixmap.fromImage(fliprus)
-        ImageCache['FliprusR'] = QtGui.QPixmap.fromImage(fliprus.mirrored(True, False))
+        if "FliprusL" not in ImageCache:
+            fliprus = SLib.GetImg('fliprus.png', True)
+            ImageCache['FliprusL'] = QtGui.QPixmap.fromImage(fliprus)
+            ImageCache['FliprusR'] = QtGui.QPixmap.fromImage(fliprus.mirrored(True, False))
 
     def dataChanged(self):
         direction = self.parent.spritedata[4]
@@ -833,6 +850,7 @@ class SpriteImage_BoltControlledMovingCoin(SLib.SpriteImage_Static): # 496
             3.75,
             ImageCache['Coin'],
             )
+        self.parent.setZValue(20000)
 
 class SpriteImage_MovingGrassPlatform(SLib.SpriteImage): # 499
     def __init__(self, parent):
@@ -932,6 +950,7 @@ class SpriteImage_Goombrat(SLib.SpriteImage_StaticMultiple): # 595
 
 ImageClasses = {
     0: SpriteImage_Goomba,
+    1: SpriteImage_Paragoomba,
     19: SpriteImage_KoopaTroopa,
     25: SpriteImage_MidwayFlag,
     32: SpriteImage_ArrowSignboard,
@@ -970,11 +989,8 @@ ImageClasses = {
     348: SpriteImage_SuperGuide,
     365: SpriteImage_GoldenYoshi,
     404: SpriteImage_PipeUpEnterable,
-#    422: SpriteImage_BigBrickBlock,
     441: SpriteImage_Fliprus,
-#   443: SpriteImage_BonyBeetle,
     446: SpriteImage_FliprusSnowball,
-#    475: SpriteImage_BigQBlock,
     481: SpriteImage_WaddleWing,
     496: SpriteImage_BoltControlledMovingCoin,
     499: SpriteImage_MovingGrassPlatform,

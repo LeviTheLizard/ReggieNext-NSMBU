@@ -1,12 +1,12 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 
-# Reggie! - New Super Mario Bros. U Level Editor
+# Reggie! Next - New Super Mario Bros. U Level Editor
 # Version v0.4 ALPHA
-# Copyright (C) 2009-2015 Treeki, Tempus, angelsl, JasonP27, Kamek64,
-# MalStar1000, RoadrunnerWMC, MrRean
+# Copyright (C) 2009-2016 Treeki, Tempus, angelsl, JasonP27, Kinnay,
+# MalStar1000, RoadrunnerWMC, MrRean, Grop
 
-# This file is part of Reggie!.
+# This file is part of Reggie! Next.
 
 # Reggie! is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -478,11 +478,13 @@ class ReggieTranslation():
                 120: 'Check for Updates...',
                 121: 'Check if any updates for Reggie! Next are available to download',
                 122: 'Highlight 3D Effects',
-                123: 'Toggle viewing of 3D depth effect highlighting (NSMBU only)',
+                123: 'Toggle viewing of 3D depth effect highlighting (NSMB2 only)',
                 124: 'Freeze\\nProgress Paths',
                 125: 'Make progress paths non-selectable',
                 126: 'Show Fullscreen',
-                127: 'Display the main window with all available screen space'
+                127: 'Display the main window with all available screen space',
+                128: 'Reload Spritedata',
+                129: 'Reload the spritedata without restarting the editor'
                 },
             'Objects': {
                 0: '[b]Tileset [tileset], object [obj]:[/b][br][width]x[height] on layer [layer]',
