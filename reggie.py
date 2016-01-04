@@ -2828,7 +2828,6 @@ class Level_NSMBU(AbstractLevel):
 
         # Add all the other stuff, too
         for szsThingName in szsData:
-            if szsThingName == 'levelname': continue
             try:
                 spl = szsThingName.split('-')
                 int(spl[0])

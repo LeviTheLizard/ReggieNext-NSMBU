@@ -9,7 +9,6 @@ goto :choice
 
 :downloadthatstuff
 
-@echo OFF
 echo Downloading latest spritedata...
 powershell -Command "Invoke-WebRequest http://rhcafe.us.to/spritexml.php -OutFile reggiedata/spritedata.xml"
 echo Done!
