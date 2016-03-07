@@ -13526,7 +13526,11 @@ class ReggieWindow(QtWidgets.QMainWindow):
         global AutoSaveDirty
         if not AutoSaveDirty: return
 
-        data = Level.save(self.getInnerSarcName())
+        name = self.getInnerSarcName()
+        if "-" not in name:
+            print('HEY THERE IS NO -, THIS WILL NOT WORK!')
+
+        data = Level.save(name)
         setSetting('AutoSaveFilePath', self.fileSavePath)
         setSetting('AutoSaveFileData', QtCore.QByteArray(data))
         AutoSaveDirty = False
@@ -13964,7 +13968,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         # get sprites
         for item in clipboard_s:
             data = item.spritedata
-            convclip.append('1:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d' % (item.type, item.objx, item.objy, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[9]))
+            convclip.append('1:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d' % (item.type, item.objx, item.objy, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[9], data[10], data[11]))
 
         convclip.append('%')
         return '|'.join(convclip)
@@ -14426,8 +14430,12 @@ class ReggieWindow(QtWidgets.QMainWindow):
 
         # no error checking. if it saved last time, it will probably work now
 
+        name = self.getInnerSarcName()
+        if "-" not in name:
+            print('HEY THERE IS NO -, THIS WILL NOT WORK!')
+
         with open(self.fileSavePath, 'wb') as f:
-            f.write(Level.save(self.getInnerSarcName()))
+            f.write(Level.save(name))
         self.LoadLevel(None, self.fileSavePath, True, 1)
 
 
@@ -14551,8 +14559,12 @@ class ReggieWindow(QtWidgets.QMainWindow):
             self.HandleSaveAs()
             return
 
+        name = self.getInnerSarcName()
+        if "-" not in name:
+            print('HEY THERE IS NO -, THIS WILL NOT WORK!')
+
         global Dirty, AutoSaveDirty
-        data = Level.save(self.getInnerSarcName())
+        data = Level.save(name)
         try:
             with open(self.fileSavePath, 'wb') as f:
                 f.write(data)
@@ -14586,14 +14598,24 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.fileSavePath = fn
         self.fileTitle = os.path.basename(fn)
 
-        data = Level.save(self.getInnerSarcName())
-        with open(fn, 'wb') as f:
-            f.write(data)
+        # we take the name of the level and make sure it's formatted right. if not, crashy
+        # this is one of the few ways, if there's no - it will certainly crash
+        failure = 0
+        name = self.getInnerSarcName()
+        # oh noes there's no - !!!
+        if "-" not in name:
+            warningBox = QtWidgets.QMessageBox(QtWidgets.QMessageBox.NoIcon, 'Name warning', 'The input name does not include a -, which is what retail levels use. \nThis may crash, because it does not fit the proper format.')
+            warningBox.exec_()
+            failure = 1
+
+        if failure == 0:
+            data = Level.save(name)
+            with open(fn, 'wb') as f:
+                f.write(data)
+            self.UpdateTitle()
 
         #setSetting('AutoSaveFilePath', fn)
         #setSetting('AutoSaveFileData', 'x')
-
-        self.UpdateTitle()
 
         #self.RecentFilesMgr.addPath(self.fileSavePath)
 
