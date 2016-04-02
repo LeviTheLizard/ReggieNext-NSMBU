@@ -2,7 +2,7 @@
 # -*- coding: latin-1 -*-
 
 # Reggie! Next - New Super Mario Bros. U Level Editor
-# Version v0.4 ALPHA
+# Version v0.6
 # Copyright (C) 2009-2016 Treeki, Tempus, angelsl, JasonP27, Kinnay,
 # MalStar1000, RoadrunnerWMC, MrRean, Grop
 
@@ -27,8 +27,8 @@
 # Builds Reggie! to a Windows binary (*.exe)
 # Use the values below to configure the release:
 
-PackageName = 'reggie_nsmbu_041_alpha'
-Version = '0.41' # This must be a valid float in string format
+PackageName = 'reggie_nsmbu_06'
+Version = '0.6' # This must be a valid float in string format
 
 
 ################################################################

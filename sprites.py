@@ -2,7 +2,7 @@
 # -*- coding: latin-1 -*-
 
 # Reggie! Next - New Super Mario Bros. U Level Editor
-# Version v0.4 ALPHA
+# Version v0.6
 # Copyright (C) 2009-2016 Treeki, Tempus, angelsl, JasonP27, Kinnay,
 # MalStar1000, RoadrunnerWMC, MrRean, Grop
 
@@ -997,13 +997,13 @@ class SpriteImage_WoodenBox(SLib.SpriteImage_StaticMultiple): # 338
             self.image = ImageCache['Reg4x2']
         elif boxsize == 3 and boxcolor == 0:
             self.image = ImageCache['Reg4x4']
-        elif boxsize == 0 and boxcolor == 2:
+        elif boxsize == 0 and boxcolor == 1 or boxcolor == 2:
             self.image = ImageCache['Inv2x2']
-        elif boxsize == 1 and boxcolor == 2:
+        elif boxsize == 1 and boxcolor == 1 or boxcolor == 2:
             self.image = ImageCache['Inv2x4']
-        elif boxsize == 2 and boxcolor == 2:
+        elif boxsize == 2 and boxcolor == 1 or boxcolor == 2:
             self.image = ImageCache['Inv4x2']
-        elif boxsize == 3 and boxcolor == 2:
+        elif boxsize == 3 and boxcolor == 1 or boxcolor == 2:
             self.image = ImageCache['Inv4x4']
         else:
             self.image = ImageCache['Reg2x2'] # let's not make some nonsense out of this
@@ -1070,34 +1070,38 @@ class SpriteImage_PipeUpEnterable(SpriteImage_Pipe): # 404
         self.direction = 'U'
         self.extraHeight = 1
 
-##class SpriteImage_BumpPlatform(SLib.SpriteImage): # 407
-##    def __init__(self, parent):
-##        super().__init__(
-##            parent,
-##            3.75,
-##            )
-##
-##    @staticmethod
-##    def loadImages():
-##        ImageCache['BumpPlatformL'] = SLib.GetImg('bump_platform_l.png')
-##        ImageCache['BumpPlatformM'] = SLib.GetImg('bump_platform_m.png')
-##        ImageCache['BumpPlatformR'] = SLib.GetImg('bump_platform_r.png')
-##
-##    def paint(self, painter):
-##        super().paint(painter)
-##
-##        self.width = ((self.parent.spritedata[8] & 0xF) + 1) << 4
-##        
-##        if self.width > 32:
-##            painter.drawTiledPixmap(27, 0, ((self.width * 3.75)), 24, ImageCache['BumpPlatformM'])
-##
-##        if self.width == 24:
-##            painter.drawPixmap(0, 0, ImageCache['BumpPlatformM'])
-##            painter.drawPixmap(8, 0, ImageCache['BumpPlatformM'])
-##        else:
-##            # normal rendering
-##            painter.drawPixmap((self.width - 24) * 3.75, 0, ImageCache['BumpPlatformM'])
-##            painter.drawPixmap(0, 0, ImageCache['BumpPlatformM'])
+class SpriteImage_BumpPlatform(SLib.SpriteImage): # 407
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            )
+        self.spritebox.shown = False
+        
+    @staticmethod
+    def loadImages():
+        ImageCache['BumpPlatformL'] = SLib.GetImg('bump_platform_l.png')
+        ImageCache['BumpPlatformM'] = SLib.GetImg('bump_platform_m.png')
+        ImageCache['BumpPlatformR'] = SLib.GetImg('bump_platform_r.png')
+
+    def dataChanged(self):
+        super().dataChanged()
+
+        self.width = ((self.parent.spritedata[8] & 0xF) + 1) << 4
+
+    def paint(self, painter):
+        super().paint(painter)
+        
+        if self.width > 32:
+            painter.drawTiledPixmap(60, 0, ((self.width * 3.75)-120), 60, ImageCache['BumpPlatformM'])
+
+        if self.width == 24:
+            painter.drawPixmap(0, 0, ImageCache['BumpPlatformR'])
+            painter.drawPixmap(8, 0, ImageCache['BumpPlatformL'])
+        else:
+            # normal rendering
+            painter.drawPixmap((self.width - 16) * 3.75, 0, ImageCache['BumpPlatformR'])
+            painter.drawPixmap(0, 0, ImageCache['BumpPlatformL'])
 
 class SpriteImage_BigBrickBlock(SLib.SpriteImage_Static): # 422
     def __init__(self, parent):
@@ -1340,6 +1344,91 @@ class SpriteImage_MiniPipeDown(SpriteImage_Pipe): # 519
         self.mini = True
         self.direction = 'D'
 
+class SpriteImage_BouncyMushroomPlatform(SLib.SpriteImage): # 542
+    def __init__(self, parent):
+        super().__init__(
+            parent,
+            3.75,
+            )
+        self.spritebox.shown = False
+        
+    @staticmethod
+    def loadImages():
+        ImageCache['SkinnyOrangeL'] = SLib.GetImg('orange_mushroom_skinny_l.png')
+        ImageCache['SkinnyOrangeM'] = SLib.GetImg('orange_mushroom_skinny_m.png')
+        ImageCache['SkinnyOrangeR'] = SLib.GetImg('orange_mushroom_skinny_r.png')
+        ImageCache['SkinnyGreenL'] = SLib.GetImg('green_mushroom_skinny_l.png')
+        ImageCache['SkinnyGreenM'] = SLib.GetImg('green_mushroom_skinny_m.png')
+        ImageCache['SkinnyGreenR'] = SLib.GetImg('green_mushroom_skinny_r.png')
+        ImageCache['ThickBlueL'] = SLib.GetImg('blue_mushroom_thick_l.png')
+        ImageCache['ThickBlueM'] = SLib.GetImg('blue_mushroom_thick_m.png')
+        ImageCache['ThickBlueR'] = SLib.GetImg('blue_mushroom_thick_r.png')
+        ImageCache['ThickRedL'] = SLib.GetImg('red_mushroom_thick_l.png')
+        ImageCache['ThickRedM'] = SLib.GetImg('red_mushroom_thick_m.png')
+        ImageCache['ThickRedR'] = SLib.GetImg('red_mushroom_thick_r.png')               
+
+
+    def dataChanged(self):
+        super().dataChanged()
+
+        self.color = self.parent.spritedata[4] & 1
+        self.girth = self.parent.spritedata[5] >> 4 & 1
+        if self.girth == 1:
+            self.width = ((self.parent.spritedata[8] & 0xF) + 3) << 4 # because default crapo
+            self.height = 30
+        else:
+            self.width = ((self.parent.spritedata[8] & 0xF) + 2) << 4
+
+    def paint(self, painter):
+        super().paint(painter)
+
+        # this is coded so horribly
+        
+        if self.width > 32:
+            if self.color == 0 and self.girth == 0:
+                painter.drawTiledPixmap(60, 0, ((self.width * 3.75)-120), 60, ImageCache['SkinnyOrangeM'])
+            elif self.color == 1 and self.girth == 0:
+                painter.drawTiledPixmap(60, 0, ((self.width * 3.75)-120), 60, ImageCache['SkinnyGreenM'])
+            elif self.color == 0 and self.girth == 1:
+                painter.drawTiledPixmap(120, 0, ((self.width * 3.75)-240), 120, ImageCache['ThickRedM'])
+            elif self.color == 1 and self.girth == 1:
+                painter.drawTiledPixmap(120, 0, ((self.width * 3.75)-240), 120, ImageCache['ThickBlueM'])                    
+            else:
+                painter.drawTiledPixmap(60, 0, ((self.width * 3.75)-120), 60, ImageCache['SkinnyOrangeM'])
+
+        if self.width == 24:
+            if self.color == 0 and self.girth == 0:
+                painter.drawPixmap(0, 0, ImageCache['SkinnyOrangeR'])
+                painter.drawPixmap(8, 0, ImageCache['SkinnyOrangeL'])
+            elif self.color == 1 and self.girth == 0:
+                painter.drawPixmap(0, 0, ImageCache['SkinnyGreenR'])
+                painter.drawPixmap(8, 0, ImageCache['SkinnyGreenL'])
+            elif self.color == 0 and self.girth == 1:
+                painter.drawPixmap(0, 0, ImageCache['ThickRedR'])
+                painter.drawPixmap(8, 0, ImageCache['ThickRedL'])
+            elif self.color == 1 and self.girth == 1:
+                painter.drawPixmap(0, 0, ImageCache['ThickBlueR'])
+                painter.drawPixmap(8, 0, ImageCache['ThickBlueL'])                    
+            else:
+                painter.drawPixmap(0, 0, ImageCache['SkinnyOrangeR'])
+                painter.drawPixmap(8, 0, ImageCache['SkinnyOrangeL'])                
+        else:
+            if self.color == 0 and self.girth == 0:
+                painter.drawPixmap((self.width - 16) * 3.75, 0, ImageCache['SkinnyOrangeR'])
+                painter.drawPixmap(0, 0, ImageCache['SkinnyOrangeL'])
+            elif self.color == 1 and self.girth == 0:
+                painter.drawPixmap((self.width - 16) * 3.75, 0, ImageCache['SkinnyGreenR'])
+                painter.drawPixmap(0, 0, ImageCache['SkinnyGreenL'])
+            elif self.color == 0 and self.girth == 1:
+                painter.drawPixmap((self.width - 32) * 3.75, 0, ImageCache['ThickRedR'])
+                painter.drawPixmap(0, 0, ImageCache['ThickRedL'])
+            elif self.color == 1 and self.girth == 1:
+                painter.drawPixmap((self.width - 32) * 3.75, 0, ImageCache['ThickBlueR'])
+                painter.drawPixmap(0, 0, ImageCache['ThickBlueL'])                 
+            else:
+                painter.drawPixmap((self.width - 16) * 3.75, 0, ImageCache['SkinnyOrangeR'])
+                painter.drawPixmap(0, 0, ImageCache['SkinnyOrangeL'])                
+
 class SpriteImage_Goombrat(SLib.SpriteImage_StaticMultiple): # 595
     def __init__(self, parent):
         super().__init__(
@@ -1432,7 +1521,7 @@ ImageClasses = {
     378: SpriteImage_TorpedoLauncher,
     402: SpriteImage_GreenRing,
     404: SpriteImage_PipeUpEnterable,
-#    407: SpriteImage_BumpPlatform,
+    407: SpriteImage_BumpPlatform,
     422: SpriteImage_BigBrickBlock,
     441: SpriteImage_Fliprus,
     446: SpriteImage_FliprusSnowball,
@@ -1450,6 +1539,7 @@ ImageClasses = {
     517: SpriteImage_MiniPipeLeft,
     518: SpriteImage_MiniPipeUp,
     519: SpriteImage_MiniPipeDown,
+    542: SpriteImage_BouncyMushroomPlatform,
     595: SpriteImage_Goombrat,
     662: SpriteImage_BlueRing,
 }
