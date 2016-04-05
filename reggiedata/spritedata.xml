@@ -236,7 +236,7 @@
     <value nybble="12" title="Shift limit by pixels..." comment="The limit will start this many pixels past the sprite's position."/>
     <value nybble="13" title="Don't limit P-Acorn" comment="The sprite will not limit scrolling if the player has a P-acorn. Used in conjunction with 612."/>
     <value nybble="18" title="Unknown Value 18"/>
-    <value nybble="20" title="Only limit entrance..." comment="The limit will work only if the zone is entered with this entrance ID."/>
+    <value nybble="20" title="Only limit entrance ID" comment="The limit will work only if the zone is entered with this entrance ID."/>
   </sprite>
   <sprite id="30" name="Horizontal Scroll Limit - Bottom">
     <list nybble="5" title="Limit scrolling to the" comment="Has to match corresponding sprite 29.">
@@ -986,7 +986,7 @@
     </list>
     <value nybble="22" title="Unknown Value 22"/>
   </sprite>
-  <sprite id="97" name="Background Centering"/>
+  <sprite id="97" name="Background Centering" notes="Centers the background."/>
   <sprite id="98" name="Enemy Generator for Pipe" notes="Requires a pipe to function properly. ">
     <value nybble="6" title="Unused Value 6" comment="Somehow related to Unknown Flag 7"/>
     <checkbox nybble="7" title="Unknown Flag 7"/>
@@ -1869,7 +1869,7 @@
       <entry value="1">Right</entry>
       <entry value="2">UNKNOWN (probably left)</entry>
     </list>
-    <checkbox nybble="11" title="Throw Delay" comment="Makes the spike have a delayed throw."/>
+    <checkbox nybble="11" title="Delay Throw" comment="Makes the spike have a delayed throw."/>
     <value nybble="12" title="Unknown Value 12"/>
     <value nybble="20" title="Unknown Value 20"/>
   </sprite>
@@ -1941,7 +1941,7 @@
     <value nybble="19" title="Unknown Value 19"/>
     <value nybble="20" title="Unknown Value 20"/>
   </sprite>
-  <sprite id="189" name="Lakitu Block [UNUSED]"/>
+  <sprite id="189" name="Lakitu Block [UNUSED]" notes="Crashes."/>
   <sprite id="190" name="Movement-controlled ? Block" notes="Matches to many movement controllers.">
     <value nybble="4" title="Unknown Value 4"/>
     <value nybble="6" title="Unknown Value 6" comment="4 bitfields"/>
@@ -2040,7 +2040,7 @@
     <value nybble="18" title="Length" comment="If value is odd, Value + (Value-1). Else, value*2. Sprite is positioned in the center of the platform."/>
   </sprite>
   <sprite id="201" name="Lava Spark Generator [UNUSED]"/>
-  <sprite id="202" name="Propeller Block [UNUSED]"/>
+  <sprite id="202" name="Propeller Block [UNUSED]" notes="A block that went unused in this game, and lacks a model. "/>
   <sprite id="203" name="Portable Ice Block [UNUSED]" notes="Works. Uses the same model as the gravity-affected ice blocks.">
     <checkbox nybble="10" title="Frozen Coin" comment="If checked, the ice block will have a coin frozen inside. (A bit glitchy when holding...)"/>
   </sprite>
@@ -2234,7 +2234,7 @@
     <value nybble="11" title="Unknown Value 11"/>
     <value nybble="12" title="Something with width/height"/>
   </sprite>
-  <sprite id="232" name="Big Glow Block" notes="the most annoying sprite in the entire game">
+  <sprite id="232" name="Big Glow Block" notes="A very complicated sprite, that easily crashes the game. At this stage, you should be careful when using this sprite. It needs a movement id to work (and not crash the game), and it can be really glitchy when it does spawn.">
     <value nybble="3-4" title="Triggering Event ID" comment="See the comment for &quot;Type&quot; for an explanation."/>
     <checkbox nybble="6" title="Unknown Flag 6" comment="No visual effect."/>
     <checkbox nybble="8" title="Do not respawn" comment="Does not respawn when this is checked. Only useful if you're using auto-scroll."/>
@@ -2250,9 +2250,12 @@
     </list>
     <value nybble="21-22" title="Movement ID" comment="This is REQUIRED to make the block light up. If you want it stationary, just add in a movement controller with no distance set."/>
   </sprite>
-  <sprite id="233" name="Line Controlled ? Block [UNUSED]" notes="Functions great.">
-    <value nybble="6" title="Movement Line ID" comment="The Line ID the ? block follows."/>
-    <list nybble="20" title="Contains" comment="The item in the ? block.">
+  <sprite id="233" name="Question Block - Uses Lines - Duplicate [UNUSED]" notes="Duplicate of 147">
+    <checkbox nybble="8" title="Counter-clockwise" comment="When checked, makes the ? block go counter clockwise."/>
+    <value nybble="11" title="Unknown Value 11"/>
+    <checkbox nybble="13" title="Spawn Acorn Mushroom" comment="Nybble 20 needs to be 0 for this to work. Works perfectly."/>
+    <checkbox nybble="16" title="Faster Movement" comment="Ticking this would make the ? block move faster."/>
+    <list nybble="20" title="Contains" comment="The contents of the item block.">
       <entry value="0">Nothing</entry>
       <entry value="1">1 coin</entry>
       <entry value="2">Fire flower</entry>
@@ -2393,7 +2396,11 @@
   </sprite>
   <sprite id="249" name="Wiggler"/>
   <sprite id="250" name="Small Gray Block [UNUSED]" notes="Spawns a gray block...collision works fine but does nothing otherwise. Won't show up unless it's hooked to a rotation controller">
-    <value nybble="21-22" title="Movement ID" comment="The movement id to hook this sprite to."/>
+    <value nybble="21-22" title="Movement ID" comment="The movement id to hook this sprite to a movement controller (68, 69, 116, 118)."/>
+    <value nybble="6" title="Z-Order"/>
+    <value nybble="20" title="Height"/>
+    <value nybble="17-18" title="Width" comment="Up to 31"/>
+    <value nybble="5" title="Unknown Flag 5"/>
   </sprite>
   <sprite id="251" name="Floating Bubble" notes="Actor: 0CA">
     <list nybble="9" title="Type" comment="Sets what type of Bubble will spawn.">
@@ -2567,7 +2574,7 @@
     <value nybble="12" title="Distance Dropped" comment="Unused; Additional distance dropped beyond its base value, repeats after 0-3"/>
   </sprite>
   <sprite id="277" name="Floating Coin" notes="This is a coin that will float on the surface of water."/>
-  <sprite id="278" name="Seesaw Mushroom" notes="Actor: 0x0bb">
+  <sprite id="278" name="Seesaw Mushroom Platform" notes="Actor: 0x0bb">
     <value nybble="10" title="Unknown Value 10"/>
     <value nybble="11" title="Unknown Value 11"/>
     <value nybble="18" title="Unknown Value 18"/>
@@ -3470,8 +3477,7 @@
     <value nybble="10" title="Unknown Value 10"/>
     <value nybble="18" title="Unknown Value 18"/>
     <value nybble="20" title="Unknown Value 20"/>
-    <value nybble="21" title="Unknown Value 21"/>
-    <value nybble="22" title="Unknown Value 22"/>
+    <value nybble="21-22" title="Movement ID" comment="Known to attach to 100."/>
   </sprite>
   <sprite id="411" name="Kamek">
     <value nybble="12" title="Unknown Value 12"/>
@@ -3589,7 +3595,7 @@
   </sprite>
   <sprite id="435" name="Sumo Bro Boss Battle Cutscene Controller" notes="Only used in 6-22, of both NSMBU and NSLU."/>
   <sprite id="436" name="CRASHING SPRITE [UNUSED]"/>
-  <sprite id="437" name="Goomba [Duplicate 1] [UNUSED]" notes="Loaded Files: kuribo.szs&#13;&#10;Actor: 0x191&#13;&#10;Existing In-Game Sprite Data: Incomplete&#13;&#10;Notes: A classic Mario enemy. Stomp on it's head to defeat it.">
+  <sprite id="437" name="Goomba [Duplicate 1] [UNUSED]" notes="A classic Mario enemy. Stomp on it's head to defeat it.">
     <value nybble="5" title="Unknown Value 5"/>
     <value nybble="9" title="Unknown Value 9"/>
     <value nybble="11" title="Unknown Value 11"/>
@@ -3656,7 +3662,7 @@
     <checkbox nybble="12" title="Has a maximum length" comment="The Beanstalk will automatically stop growing when it has a length of about 40 tiles (being worked on)"/>
     <value nybble="22" title="Another ID" comment="Use the same value as the Path ID. Any Beanstalk Leaves (!) should be linked up with this ID (unless there is only one Beanstalk)"/>
   </sprite>
-  <sprite id="446" name="Fliprus Snowball" notes="DO NOT PLACE NEAR A WOOD BLOCK WALL&#13;&#10;">
+  <sprite id="446" name="Fliprus Snowball" notes="Placing this near a wood block wall is not advised.&#13;&#10;">
     <value nybble="5" title="Unknown Value 5"/>
     <value nybble="12" title="Unknown Value 12"/>
     <list nybble="11" title="Direction">
@@ -3857,7 +3863,9 @@
     <value nybble="12" title="Unknown Value 12"/>
     <value nybble="21-22" title="Movement ID" comment="Does not actually move the sprite, but plays an animation."/>
   </sprite>
-  <sprite id="486" name="&quot;Frame setting tag&quot; - Does nothing" notes="Empty methods."/>
+  <sprite id="486" name="&quot;Frame setting tag&quot; - Does nothing" notes="Empty methods.">
+    <value nybble="12" title="Unknown Value 12"/>
+  </sprite>
   <sprite id="487" name="Bowser area" notes="&quot;Area dedicated OBJ Bowser&quot;. ">
     <value nybble="3-4" title="Event ID"/>
     <value nybble="12" title="Location ID"/>
@@ -3919,7 +3927,7 @@
   </sprite>
   <sprite id="499" name="Moving Acorn Plains Land Block (Solid-on-Top)">
     <value nybble="6" title="Unknown Value 6"/>
-    <value nybble="7" title="Unknown Value 7"/>
+    <value nybble="7" title="Rotation"/>
     <value nybble="11" title="Unknown Value 11"/>
     <value nybble="12" title="Unknown Value 12"/>
     <value nybble="18" title="Width" comment="Value + 1"/>
@@ -3979,7 +3987,12 @@
     <value nybble="16" title="Unknown Value 16"/>
   </sprite>
   <sprite id="509" name="Enterable Pipe - Right [UNUSED]" notes="A pipe that you can enter without having an entrance on the sprite. Seems to only send you to 0, though."/>
-  <sprite id="510" name="Enterable Pipe - Left [UNUSED]" notes="A pipe that you can enter without having an entrance on the sprite. Seems to only send you to 0, though"/>
+  <sprite id="510" name="Enterable Pipe - Left [UNUSED]" notes="A pipe that you can enter without having an entrance on the sprite. Seems to only send you to 0, though">
+    <value nybble="8" title="Unknown Value 8"/>
+    <value nybble="10" title="Unknown Value 10"/>
+    <value nybble="11" title="Unknown Value 11"/>
+    <value nybble="12" title="Unknown Value 12"/>
+  </sprite>
   <sprite id="511" name="Pipe - Down">
     <checkbox nybble="8" title="Painted" comment="If this is checked, the pipe will be &quot;painted&quot;."/>
     <value nybble="10" title="Unknown Value 10"/>
@@ -4145,7 +4158,7 @@
       <entry value="2">Up/Down</entry>
       <entry value="3">Down/Up</entry>
     </list>
-    <value nybble="15" title="Movement Distance" comment="How far the platform goes."/>
+    <value nybble="15" title="Movement Distance" comment="How far the platform goes in blocks."/>
   </sprite>
   <sprite id="536" name="Rocky Wrench"/>
   <sprite id="537" name="Flying Wrench [UNUSED]" notes="Name translates to Spanner. Spawns a wrench and is thrown to the left.&#13;&#10;Might be spawned by Rocky Wrenches."/>
@@ -4488,7 +4501,7 @@
   <sprite id="592" name="Search Cheep Cheep [UNUSED]" notes="An aggressive green Cheep Cheep that tries to swim towards the player. Needs a location to function.">
     <value nybble="8-9" title="Location ID" comment="The location ID the Cheep Cheep will spawn in once the player enters."/>
   </sprite>
-  <sprite id="593" name="Sumo Bro." notes="Loaded Files: KK.szs"/>
+  <sprite id="593" name="Sumo Bro."/>
   <sprite id="594" name="Sumo. Bro's thunder"/>
   <sprite id="595" name="Goombrat" notes="Loaded Files: kakibo.szs&#13;&#10;Goombrats are a species of Goomba that are lighter brown, and resemble persimmons more than mushrooms. They have different facial features, and the black stems on their head are similar to tomato leaves. They also turn when they reach edges, which is similar to the behaviour of red Koopa Troopas. The enemy&amp;#39;s name is a composition of &quot;Goomba&quot; and &quot;brat&quot;. Also their teeth point down, when regular Goombas teeth point up.">
     <value nybble="11" title="Unknown Value 11"/>
@@ -4798,7 +4811,7 @@
       <entry value="6">UNUSED</entry>
       <entry value="7">UNKNOWN</entry>
     </list>
-    <value nybble="10" title="Y-Offset" comment="Moves the cannon {value} blocks up."/>
+    <value nybble="10" title="Y-Offset" comment="Moves the cannon value blocks up."/>
     <checkbox nybble="11" title="Unknown Flag 11"/>
     <value nybble="5" title="Unknown Value 5" comment="Must be 3 or lower."/>
     <checkbox nybble="6" title="Unknown Flag 6"/>
@@ -4867,7 +4880,7 @@
     <value nybble="9" title="Unknown Value 9"/>
     <value nybble="22" title="Unknown Value 22"/>
   </sprite>
-  <sprite id="677" name="UNKNOWN SPRITE - NSLU">
+  <sprite id="677" name="Water Effects Related - NSLU">
     <value nybble="11" title="Unknown Value 11" comment="Only used as 1."/>
   </sprite>
   <sprite id="678" name="Event activated invisible block - NSLU" notes="Might have hidden settings (like spawning an acorn mushroom).">
@@ -5045,9 +5058,12 @@
     <value nybble="22" title="Unknown Value 22"/>
   </sprite>
   <sprite id="707" name="? Block - NSLU">
-    <value nybble="22" title="Unknown Value 22"/>
+    <value nybble="22" title="Unknown Value 22" comment="Probably combined with 21. Probably Movement ID"/>
+    <value nybble="6" title="Unknown Value 6"/>
+    <value nybble="13" title="Unknown Value 13"/>
+    <value nybble="21" title="Unknown Value 21" comment="Probably combined with 22. Probably Movement ID"/>
   </sprite>
-  <sprite id="708" name="&quot;Player screen horizontal scissors request tag&quot; - NSLU" notes="This sprite sets a flag on player actors, and deletes itself. I don't know what this flag changes."/>
+  <sprite id="708" name="Autoscrolling Player Effect?- NSLU" notes="This sprite sets a flag on player actors, and deletes itself. I don't know what this flag changes."/>
   <sprite id="709" name="Movement controlled metal castle block - NSLU">
     <value nybble="18" title="Width" comment="Value + 2 blocks. Maybe 2 nybbles..."/>
     <value nybble="20" title="Height" comment="Value + 2 blocks. Maybe 2 nybbles..."/>

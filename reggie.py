@@ -2,7 +2,7 @@
 # -*- coding: latin-1 -*-
 
 # Reggie! Next - New Super Mario Bros. U Level Editor
-# Version v0.4 ALPHA
+# Version v0.6
 # Copyright (C) 2009-2016 Treeki, Tempus, angelsl, JasonP27, Kinnay,
 # MalStar1000, RoadrunnerWMC, MrRean, Grop
 
@@ -80,7 +80,7 @@ import yaz0
 
 ReggieID = 'Reggie! Level Editor Next by Treeki, Tempus, RoadrunnerWMC, MrRean and Grop'
 ReggieVersion = 'Next Milestone 2 Alpha 4'
-ReggieVersionShort = "v0.4.1 (a)"
+ReggieVersionShort = "v0.6 (a)"
 UpdateURL = 'http://rvlution.net/reggie/updates.xml'
 
 TileWidth = 60
@@ -1866,9 +1866,9 @@ class ReggieRibbonFileMenu(QFileMenu):
         b = self.addArrowButton(openPanel, gi('open', True),   ts('MenuItems', 112), mw.HandleOpenFromName, None,               ts('MenuItems', 3))
         c = self.addButton(                gi('save', True),   ts('MenuItems', 8),   mw.HandleSave,         qk.Save,            ts('MenuItems', 9))
         d = self.addButton(                gi('saveas', True), ts('MenuItems', 10),  mw.HandleSaveAs,       qk.SaveAs,          ts('MenuItems', 11))
-        #e = self.addButton(                gi('compress', True), ts('MenuItems', 130),  mw.HandleCompress,       qk.Compress,          ts('MenuItems', 131))
-        #f = self.addButton(                gi('compressnslu', True), ts('MenuItems', 132),  mw.HandleCompressNSLU,       qk.CompressNSLU,          ts('MenuItems', 133))
-        self.btns['new'], self.btns['openname1'], self.btns['save'], self.btns['saveas'], self.btns['compress'], self.btns['compressnslu'] = a, b, c, d
+        e = self.addButton(                gi('compress', True), ts('MenuItems', 130),  mw.HandleCompress,       qk.Compress,          ts('MenuItems', 131))
+        f = self.addButton(                gi('compressnslu', True), ts('MenuItems', 132),  mw.HandleCompressNSLU,       qk.CompressNSLU,          ts('MenuItems', 133))
+        self.btns['new'], self.btns['openname1'], self.btns['save'], self.btns['saveas'], self.btns['compress'], self.btns['compressnslu'] = a, b, c, d, e, f
         self.addSeparator()
         a = self.addButton(gi('info', True),     trans.string('MenuItems', 12), mw.HandleInfo,        'Ctrl+Alt+I', trans.string('MenuItems', 13))
         b = self.addButton(gi('settings', True), trans.string('MenuItems', 18), mw.HandlePreferences, 'Ctrl+Alt+P', trans.string('MenuItems', 19))
@@ -3480,13 +3480,14 @@ def ProcessOverrides(idx, name):
     #                    0768-1023 for Pa3;
     # From 1024 (0x200 * 4), there is room for the overrides.
     try:
-        # More to come...
         tsindexes = ['Pa0_jyotyu', 'Pa0_jyotyu_chika', 'Pa0_yougan', 'Pa0_yougan2']
         if name in tsindexes:
-            offset = (0x200 * 4) #+ (tsindexes.index(name) * 16)
+            # We use the same overrides for all Pa0 tilesets
+            offset = 0x200 * 4
 
             defs = ObjectDefinitions[idx]
             t = Tiles
+
             # Invisible, brick and ? blocks
             ## Invisible
             replace = offset + 3
@@ -3506,10 +3507,6 @@ def ProcessOverrides(idx, name):
                 t[i].setOverridden()
 
             # Colisions
-            ## Empty
-            t[0].main = t[offset + 0].main
-            t[0].setOverridden()
-
             ## Full block
             t[1].main = t[offset + 1].main
             t[1].setOverridden()
@@ -3715,13 +3712,29 @@ def ProcessOverrides(idx, name):
                 replace += 1
 
             # Lines
-            # NEED IMPROVEMENT FIRST!
-            #t[].main = t[offset + ].main
-            #t[].setOverridden()
+            ## Straight lines
+            ### Normal
+            t[216].main = t[offset + 128].main
+            t[216].setOverridden()
+            t[217].main = t[offset + 63].main
+            t[217].setOverridden()
+            ### Corners and diagonals
+            replace = offset + 122
+            for i in range(218,231):
+                if i != 224: #random empty tile
+                    t[i].main = t[replace].main
+                    t[i].setOverridden()
+                replace += 1
+
+            ## Circles and stops
+            for i in range(231,256):
+                t[i].main = t[replace].main
+                t[i].setOverridden()
+                replace += 1
 
     except Exception:
         print("Whoops, something went wrong while processing the overrides...")
-
+        
 def SimpleTilesetNames():
     """
     simple
@@ -12768,8 +12781,8 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.CreateAction('openrecent', None, GetIcon('recent'), trans.string('MenuItems', 6), trans.string('MenuItems', 7), None)
         #self.CreateAction('save', self.HandleSave, GetIcon('save'), trans.string('MenuItems', 8), trans.string('MenuItems', 9), QtGui.QKeySequence.Save)
         self.CreateAction('saveas', self.HandleSaveAs, GetIcon('saveas'), trans.string('MenuItems', 10), trans.string('MenuItems', 11), QtGui.QKeySequence.SaveAs)
-        #self.CreateAction('compress', self.HandleCompress, GetIcon('saveas'), trans.string('MenuItems', 130), trans.string('MenuItems', 131), QtGui.QKeySequence.SaveAs)
-        #self.CreateAction('compressnslu', self.HandleCompressNSLU, GetIcon('saveas'), trans.string('MenuItems', 132), trans.string('MenuItems', 133), QtGui.QKeySequence.SaveAs)
+        self.CreateAction('compress', self.HandleCompress, GetIcon('saveas'), trans.string('MenuItems', 130), trans.string('MenuItems', 131), QtGui.QKeySequence.SaveAs)
+        self.CreateAction('compressnslu', self.HandleCompressNSLU, GetIcon('saveas'), trans.string('MenuItems', 132), trans.string('MenuItems', 133), QtGui.QKeySequence.SaveAs)
         self.CreateAction('metainfo', self.HandleInfo, GetIcon('info'), trans.string('MenuItems', 12), trans.string('MenuItems', 13), QtGui.QKeySequence('Ctrl+Alt+I'))
         self.CreateAction('screenshot', self.HandleScreenshot, GetIcon('screenshot'), trans.string('MenuItems', 14), trans.string('MenuItems', 15), QtGui.QKeySequence('Ctrl+Alt+S'))
         self.CreateAction('changegamepath', self.HandleChangeGamePath, GetIcon('folderpath'), trans.string('MenuItems', 16), trans.string('MenuItems', 17), QtGui.QKeySequence('Ctrl+Alt+G'))
@@ -12870,8 +12883,8 @@ class ReggieWindow(QtWidgets.QMainWindow):
         fmenu.addSeparator()
         #fmenu.addAction(self.actions['save'])
         fmenu.addAction(self.actions['saveas'])
-        #fmenu.addAction(self.actions['compress'])
-        #fmenu.addAction(self.actions['compressnslu'])
+        fmenu.addAction(self.actions['compress'])
+        fmenu.addAction(self.actions['compressnslu'])
         fmenu.addAction(self.actions['metainfo'])
         fmenu.addSeparator()
         fmenu.addAction(self.actions['screenshot'])
@@ -12994,7 +13007,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
                 'openrecent',
                 'save',
                 'saveas',
-                #'compress',
+                'compress',
                 'metainfo',
                 'screenshot',
                 'changegamepath',

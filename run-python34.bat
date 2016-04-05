@@ -1,5 +1,16 @@
 @ECHO OFF
 
+echo This script is able to start Reggie and/or download the
+echo latest spritedata and category data XMLs off of the internet.
+echo(
+echo Requirements:
+echo - Python 3.4, installed to the default location
+echo - PowerShell 3.0 (for the spritedata and categoryxml download), included
+echo   by default on Windows 10, for other versions of Windows,
+echo   you have to download the installer off of the internet.
+echo(
+echo Enjoy!
+
 :choice
 set /P c=Do you want to download the latest spritedata.xml [Y/N]?
 if /I "%c%" EQU "Y" goto :downloadthatstuff
