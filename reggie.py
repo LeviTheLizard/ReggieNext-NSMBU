@@ -1375,6 +1375,7 @@ def LoadActionsLists():
         (trans.string('MenuItems', 12), False, 'metainfo'),
         (trans.string('MenuItems', 14), True,  'screenshot'),
         (trans.string('MenuItems', 16), False, 'changegamepath'),
+        (trans.string('MenuItems', 16), False, 'changesavepath'),
         (trans.string('MenuItems', 18), False, 'preferences'),
         (trans.string('MenuItems', 20), False, 'exit'),
         )
@@ -1777,17 +1778,7 @@ class ReggieRibbon(QRibbon):
         return
         self.pDock = dock
         self.palBtn = self.dockGroup.addButton(self.HandlePaletteClick, act.shortcut(), trans.string('MenuItems', 97), True, 'palette', trans.string('MenuItems', 96), True, True)
-
-    def addIslandGen(self, dock, act):
-        """
-        Adds the Show/Hide Island Generator action to the ribbon
-        """
-        return
-        self.iDock = dock
-        self.genBtn = self.dockGroup.addButton(self.HandleIslandGenClick, act.shortcut(), trans.string('MenuItems', 101), True, 'islandgen', trans.string('MenuItems', 100), True, True)
-        self.viewTab.addGroup(self.dockGroup)
-        self.viewTab.finish()
-
+        
     @QtCore.pyqtSlot(bool)
     def HandleOverviewClick(self, checked = None):
         """
@@ -1807,17 +1798,7 @@ class ReggieRibbon(QRibbon):
         visible = checked if checked is not None else not self.pDock.isVisible()
         self.pDock.setVisible(visible)
         if checked is None: self.palBtn.setChecked(visible)
-
-    @QtCore.pyqtSlot(bool)
-    def HandleIslandGenClick(self, checked = None):
-        """
-        Updates the island generator btn
-        """
-        return
-        visible = checked if checked is not None else not self.iDock.isVisible()
-        self.iDock.setVisible(visible)
-        if checked is None: self.genBtn.setChecked(visible)
-
+        
     def updateAreaComboBox(self, areas, area):
         """
         Updates the Area Combo Box
@@ -2385,7 +2366,7 @@ def module_path():
 
 def SetGamePath(newpath):
     """
-    Sets the NSMBWii game path
+    Sets the NSMBU game path
     """
     global gamedef
 
@@ -2393,6 +2374,22 @@ def SetGamePath(newpath):
     # isValidGamePath crashes in os.path.join if QString is used..
     # so we must change it to a Python string manually
     gamedef.SetGamePath(str(newpath))
+
+def SetFakeYaz0PathNSMBU(NSMBUgamePath):
+    """
+    get the path to use with fake_yaz0.exe for NSMBU
+    """
+    global fakeyazPathNSMBU
+
+    fakeyaz0PathNSMBU.SetFakeYaz0PathNSMBU(str(NSMBUgamePath))
+
+def SetFakeYaz0PathNSLU(NSLUgamePath):
+    """
+    get the path to use with fake_yaz0.exe for NSLU
+    """
+    global fakeyazPathNSLU
+
+    fakeyaz0PathNSLU.SetFakeYaz0PathNSLU(str(NSLUgamePath))
 
 # USELESS
 def calculateBgAlignmentMode(idA, idB, idC):
@@ -2516,18 +2513,6 @@ class TilesetTile():
             animTiles.append(pix)
         self.animTiles = animTiles
         self.isAnimated = True
-
-        # This NSMBLib method crashes.
-        ##padded = str(data)
-        ##padded += ' ' * (0x80000 - len(data))
-        ### It'll crash on this next line
-        ##rgbdata = NSMBLib.decodeTileAnims(padded)
-        ##tilesImg = QtGui.QImage(rgbdata, 32, (len(rgbdata)/4)/32, 32*4, QtGui.QImage.Format_ARGB32_Premultiplied)
-        ##tilesPix = QtGui.QPixmap.fromImage(tilesImg)
-
-        ##self.isAnimated = True
-        ##self.animTiles = []
-        ##self.animTiles.append(tilesPix.copy(0, 0, 31, 31).scaled(TileWidth, TileWidth))
 
     def nextFrame(self):
         """
@@ -3073,19 +3058,6 @@ def _LoadTileset(idx, name, reload=False):
         TileThreads[idx].setStuff(comptiledata, idx, tileoffset, name)
         TileThreads[idx].start()
 
-        # # Add overlays
-        # overlayfile = arc['BG_unt/%s_add.bin' % name].data
-        # overlayArray = struct.unpack('>441H', overlayfile[:882])
-        # i = idx * 0x200
-        # arrayi = 0
-        # for y in range(21):
-        #     for x in range(21):
-        #         if Tiles[i] is not None:
-        #             Tiles[i].addOverlay(Tiles[overlayArray[arrayi]])
-        #         i += 1; arrayi += 1
-
-        # Load the tileset animations, if there are any
-        #isAnimated, prefix = CheckTilesetAnimated(arc)
         isAnimated = False
         if isAnimated:
             row = 0
@@ -4366,6 +4338,7 @@ class Area_NSMBU(AbstractParsedArea):
             bgs[bg[0]] = bg
             offset += 28
         self.bgs = bgs
+        print(bgs)
 
         # Block 10 - zone data
         zonedata = self.blocks[9]
@@ -4594,7 +4567,7 @@ class Area_NSMBU(AbstractParsedArea):
         zonelist = self.zones
         for entrance in self.entrances:
             zoneID = MapPositionToZoneID(zonelist, entrance.objx, entrance.objy)
-            entstruct.pack_into(buffer, offset, int(entrance.objx), int(entrance.objy), int(entrance.unk05), int(entrance.entid), int(entrance.destarea), int(entrance.destentrance), int(entrance.enttype), int(entrance.unk0C), zoneID, int(entrance.unk0F), int(entrance.entsettings), int(entrance.unk12), int(entrance.unk13), int(entrance.unk14), int(entrance.unk15), int(entrance.unk16))
+            entstruct.pack_into(buffer, offset, int(entrance.objx), int(entrance.objy), int(entrance.unk05), int(entrance.entid), int(entrance.destarea), int(entrance.destentrance), int(entrance.enttype), int(entrance.unk0C), zoneID, int(entrance.unk0F), int(entrance.entsettings), int(entrance.unk12), int(entrance.camera), int(entrance.pathID), int(entrance.pathnodeindex), int(entrance.unk16))
             offset += 24
         self.blocks[6] = bytes(buffer)
 
@@ -6293,10 +6266,11 @@ class EntranceItem(LevelEditorItem):
             """
             return self.BoundingRect
 
-    def __init__(self, x, y, unk05, id, destarea, destentrance, type, unk0C, zone, unk0F, settings, unk12, unk13, unk14, unk15, unk16):
+    def __init__(self, x, y, unk05, id, destarea, destentrance, type, unk0C, zone, unk0F, settings, unk12, camera, pathID, pathnodeindex, unk16):
         """
         Creates an entrance with specific data
         """
+        print('Entrance found! ' + str(type))
         if EntranceItem.EntranceImages is None:
             ei = []
             src = QtGui.QPixmap('reggiedata/entrances.png')
@@ -6321,9 +6295,9 @@ class EntranceItem(LevelEditorItem):
         self.unk0F = unk0F
         self.entsettings = settings
         self.unk12 = unk12
-        self.unk13 = unk13
-        self.unk14 = unk14
-        self.unk15 = unk15
+        self.camera = camera
+        self.pathID = pathID
+        self.pathnodeindex = pathnodeindex
         self.unk16 = unk16
         self.entlayer = layer
         self.entpath = path
@@ -6747,7 +6721,7 @@ class CommentItem(LevelEditorItem):
         self.objx = x
         self.objy = y
         self.listitem = None
-        self.LevelRect = (QtCore.QRectF(self.objx / 16, self.objy / 16, 2.25, 2.25))
+        self.LevelRect = (QtCore.QRectF(self.objx / 16, self.objy / 16, 3.75, 3.75))
 
         self.setFlag(self.ItemIsMovable, not CommentsFrozen)
         self.setFlag(self.ItemIsSelectable, not CommentsFrozen)
@@ -8065,28 +8039,36 @@ class EntranceEditorWidget(QtWidgets.QWidget):
         self.unk05.valueChanged.connect(self.HandleUnk05)
         self.unk0C = QtWidgets.QSpinBox()
         self.unk0C.setRange(0, 255)
-        self.unk0C.setToolTip('Unknown 0x0C')
+        self.unk0C.setToolTip('Ambush related')
+        self.unk0C.setToolTip('Related to ambushes...')
         self.unk0C.valueChanged.connect(self.HandleUnk0C)
         self.unk0F = QtWidgets.QSpinBox()
         self.unk0F.setRange(0, 255)
-        self.unk0F.setToolTip('Unknown 0x0F')
+        self.unk0F.setToolTip('Multiplayer Related')
+        self.unk0F.setToolTip('Possibly related to multiplayer?')
         self.unk0F.valueChanged.connect(self.HandleUnk0F)
         self.unk12 = QtWidgets.QSpinBox()
         self.unk12.setRange(0, 255)
         self.unk12.setToolTip('Unknown 0x12')
         self.unk12.valueChanged.connect(self.HandleUnk12)
-        self.unk13 = QtWidgets.QSpinBox()
-        self.unk13.setRange(0, 255)
-        self.unk13.setToolTip('Unknown 0x13')
-        self.unk13.valueChanged.connect(self.HandleUnk13)
-        self.unk14 = QtWidgets.QSpinBox()
-        self.unk14.setRange(0, 255)
-        self.unk14.setToolTip('Unknown 0x14')
-        self.unk14.valueChanged.connect(self.HandleUnk14)
-        self.unk15 = QtWidgets.QSpinBox()
-        self.unk15.setRange(0, 255)
-        self.unk15.setToolTip('Unknown 0x15')
-        self.unk15.valueChanged.connect(self.HandleUnk15)
+        self.camera = QtWidgets.QSpinBox()
+        self.camera.setRange(0, 255)
+        self.camera.setToolTip('Related to camera movement. Value of 1 makes the camera zoom in if the value is < 0, or out if it\'s >= 0.')
+        self.camera.valueChanged.connect(self.HandleCamera)
+
+        
+        self.pathID = QtWidgets.QSpinBox()
+        self.pathID.setRange(0, 255)
+        self.pathID.setToolTip('The Path ID, for autoscroll purposes.')
+        self.pathID.valueChanged.connect(self.HandlePathID)
+
+        
+        self.pathnodeindex = QtWidgets.QSpinBox()
+        self.pathnodeindex.setRange(0, 255)
+        self.pathnodeindex.setToolTip('The Path Node Index, for autoscroll purposes.')
+        self.pathnodeindex.valueChanged.connect(self.HandlePathNodeIndex)
+
+        
         self.unk16 = QtWidgets.QSpinBox()
         self.unk16.setRange(0, 255)
         self.unk16.setToolTip('Unknown 0x16')
@@ -8121,20 +8103,20 @@ class EntranceEditorWidget(QtWidgets.QWidget):
         layout.addWidget(createHorzLine(), 7, 0, 1, 4)
 
         layout.addWidget(QtWidgets.QLabel('Unknown 0x05:'), 8, 0)
-        layout.addWidget(QtWidgets.QLabel('Unknown 0x0C:'), 9, 0)
-        layout.addWidget(QtWidgets.QLabel('Unknown 0x0F:'), 10, 0)
+        layout.addWidget(QtWidgets.QLabel('Ambush Related:'), 9, 0)
+        layout.addWidget(QtWidgets.QLabel('Multiplayer Related:'), 10, 0)
         layout.addWidget(QtWidgets.QLabel('Unknown 0x12:'), 11, 0)
-        layout.addWidget(QtWidgets.QLabel('Unknown 0x13:'), 12, 0)
-        layout.addWidget(QtWidgets.QLabel('Unknown 0x14:'), 13, 0)
-        layout.addWidget(QtWidgets.QLabel('Unknown 0x15:'), 14, 0)
+        layout.addWidget(QtWidgets.QLabel('Camera Related:'), 12, 0)
+        layout.addWidget(QtWidgets.QLabel('Path ID:'), 13, 0)
+        layout.addWidget(QtWidgets.QLabel('Path Node Index:'), 14, 0)
         layout.addWidget(QtWidgets.QLabel('Unknown 0x16:'), 15, 0)
         layout.addWidget(self.unk05, 8, 1)
         layout.addWidget(self.unk0C, 9, 1)
         layout.addWidget(self.unk0F, 10, 1)
         layout.addWidget(self.unk12, 11, 1)
-        layout.addWidget(self.unk13, 12, 1)
-        layout.addWidget(self.unk14, 13, 1)
-        layout.addWidget(self.unk15, 14, 1)
+        layout.addWidget(self.camera, 12, 1)
+        layout.addWidget(self.pathID, 13, 1)
+        layout.addWidget(self.pathnodeindex, 14, 1)
         layout.addWidget(self.unk16, 15, 1)
 
         self.ent = None
@@ -8160,9 +8142,9 @@ class EntranceEditorWidget(QtWidgets.QWidget):
         self.unk0C.setValue(ent.unk0C)
         self.unk0F.setValue(ent.unk0F)
         self.unk12.setValue(ent.unk12)
-        self.unk13.setValue(ent.unk13)
-        self.unk14.setValue(ent.unk14)
-        self.unk15.setValue(ent.unk15)
+        self.camera.setValue(ent.camera)
+        self.pathID.setValue(ent.pathID)
+        self.pathnodeindex.setValue(ent.pathnodeindex)
         self.unk16.setValue(ent.unk16)
 
         self.allowEntryCheckbox.setChecked(((ent.entsettings & 0x80) == 0))
@@ -8252,24 +8234,24 @@ class EntranceEditorWidget(QtWidgets.QWidget):
         self.ent.UpdateTooltip()
         self.ent.UpdateListItem()
     @QtCore.pyqtSlot(int)
-    def HandleUnk13(self, i):
+    def HandleCamera(self, i):
         if self.UpdateFlag: return
         SetDirty()
-        self.ent.unk13 = i
+        self.ent.camera = i
         self.ent.UpdateTooltip()
         self.ent.UpdateListItem()
     @QtCore.pyqtSlot(int)
-    def HandleUnk14(self, i):
+    def HandlePathID(self, i):
         if self.UpdateFlag: return
         SetDirty()
-        self.ent.unk14 = i
+        self.ent.pathID = i
         self.ent.UpdateTooltip()
         self.ent.UpdateListItem()
     @QtCore.pyqtSlot(int)
-    def HandleUnk15(self, i):
+    def HandlePathNodeIndex(self, i):
         if self.UpdateFlag: return
         SetDirty()
-        self.ent.unk15 = i
+        self.ent.pathnodeindex = i
         self.ent.UpdateTooltip()
         self.ent.UpdateListItem()
     @QtCore.pyqtSlot(int)
@@ -8572,301 +8554,7 @@ class ObjectDataEditorWidget(QtWidgets.QWidget):
         self.content.setCurrentIndex(result)
         self.object.data = result
         mainWindow.scene.update()
-
-
-class IslandGeneratorWidget(QtWidgets.QWidget):
-    """
-    Widget for editing entrance properties
-    """
-    def __init__(self, defaultmode=False):
-        """
-        Constructor
-        """
-        QtWidgets.QWidget.__init__(self)
-        self.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed))
-
-        # create widgets
-        self.wpos = QtWidgets.QSpinBox()
-        self.wpos.setRange(1, 65535)
-        self.wpos.setToolTip('Width (tiles)')
-        self.wpos.setValue(7)
-
-        self.hpos = QtWidgets.QSpinBox()
-        self.hpos.setRange(1, 65535)
-        self.hpos.setToolTip('Height (tiles)')
-        self.hpos.setValue(7)
-
-        self.tileset = QtWidgets.QSpinBox()
-        self.tileset.setRange(1, 4)
-        self.tileset.setToolTip('Tileset ID')
-        self.tileset.setValue(2)
-
-        self.tstl = QtWidgets.QSpinBox()
-        self.tstl.setRange(0, 65536)
-        self.tstl.setToolTip('Top-left Object ID')
-        self.tstl.setValue(5)
-
-        self.tstg = QtWidgets.QSpinBox()
-        self.tstg.setRange(0, 65536)
-        self.tstg.setToolTip('Top Ground Object ID')
-        self.tstg.setValue(0)
-
-        self.tstr = QtWidgets.QSpinBox()
-        self.tstr.setRange(0, 65536)
-        self.tstr.setToolTip('Top-right Object ID')
-        self.tstr.setValue(6)
-
-
-        self.tsml = QtWidgets.QSpinBox()
-        self.tsml.setRange(0, 65536)
-        self.tsml.setToolTip('Middle-left Object ID')
-        self.tsml.setValue(3)
-
-        self.tsmf = QtWidgets.QSpinBox()
-        self.tsmf.setRange(0, 65536)
-        self.tsmf.setToolTip('Middle Filler Object ID')
-        self.tsmf.setValue(1)
-
-        self.tsmr = QtWidgets.QSpinBox()
-        self.tsmr.setRange(0, 65536)
-        self.tsmr.setToolTip('Middle-right Object ID')
-        self.tsmr.setValue(4)
-
-
-        self.tsbl = QtWidgets.QSpinBox()
-        self.tsbl.setRange(0, 65536)
-        self.tsbl.setToolTip('Bottom-left Object ID')
-        self.tsbl.setValue(7)
-
-        self.tsbm = QtWidgets.QSpinBox()
-        self.tsbm.setRange(0, 65536)
-        self.tsbm.setToolTip('Bottom Roof Object ID')
-        self.tsbm.setValue(2)
-
-        self.tsbr = QtWidgets.QSpinBox()
-        self.tsbr.setRange(0, 65536)
-        self.tsbr.setToolTip('Bottom-right Object ID')
-        self.tsbr.setValue(8)
-
-
-        self.midix = QtWidgets.QSpinBox()
-        self.midix.setRange(0, 65536)
-        self.midix.setValue(0)
-        self.midix.setToolTip('Top Ground, Middle Filler and Bottom Roof \'interval\'. Set 0 to disable. The amount of tiles before a new object is created.<br><br>e.g. if you wanted a 2000t long island, the middle can be seperated into 100 20t long objects instead of 1 2000t long object.')
-
-        self.midiy = QtWidgets.QSpinBox()
-        self.midiy.setRange(0, 65536)
-        self.midiy.setValue(0)
-        self.midiy.setToolTip('Middle Left, Middle Filler and Middle Right \'interval\'. Set 0 to disable. The amount of tiles before a new object is created.<br><br>e.g. if you wanted a 2000t tall island, the middle can be seperated into 100 20t tall objects instead of 1 2000t tall object.')
-
-
-        self.layer = QtWidgets.QSpinBox()
-        self.layer.setRange(0, 2)
-        self.layer.setToolTip('Layer to paint the island onto')
-        self.layer.setValue(1)
-
-        self.copyButton = QtWidgets.QPushButton('Copy to Clipboard')
-        self.copyButton.setToolTip('Copies the island you specified here to the clipboard. Paste it anywhere in Reggie. (Ctrl+V)')
-        self.copyButton.clicked.connect(self.HandleCopy)
-
-        self.placeButton = QtWidgets.QPushButton('Place')
-        self.placeButton.setToolTip('Places the island specified here into Reggie.')
-        self.placeButton.clicked.connect(self.HandlePlace)
-
-
-        # create a layout
-        layout = QtWidgets.QGridLayout()
-        self.setLayout(layout)
-
-        self.editingLabel = QtWidgets.QLabel('<b>Island Generator</b>')
-        layout.addWidget(self.editingLabel, 0, 0, 1, 4, Qt.AlignTop)
-        # add labels
-
-        layout.addWidget(QtWidgets.QLabel('Width:'), 1, 0, 1, 1, Qt.AlignRight)
-        layout.addWidget(QtWidgets.QLabel('Height:'), 2, 0, 1, 1, Qt.AlignRight)
-        layout.addWidget(QtWidgets.QLabel('Layer:'), 3, 0, 1, 1, Qt.AlignRight)
-        layout.addWidget(QtWidgets.QLabel('Tileset ID:'), 4, 0, 1, 1, Qt.AlignRight)
-        layout.addWidget(QtWidgets.QLabel('X Interval:'), 5, 0, 1, 1, Qt.AlignRight)
-        layout.addWidget(QtWidgets.QLabel('Y Interval:'), 6, 0, 1, 1, Qt.AlignRight)
-        layout.addWidget(createHorzLine(), 7, 0, 1, -1)
-
-        # add the widgets
-        layout.addWidget(self.wpos, 1, 1, 1, -1)
-        layout.addWidget(self.hpos, 2, 1, 1, -1)
-        layout.addWidget(self.layer, 3, 1, 1, -1)
-        layout.addWidget(self.tileset, 4, 1, 1, -1)
-        layout.addWidget(self.midix, 5, 1, 1, -1)
-        layout.addWidget(self.midiy, 6, 1, 1, -1)
-
-        layout.addWidget(self.tstl, 8, 1, 1, 1)
-        layout.addWidget(self.tstg, 8, 2, 1, 1)
-        layout.addWidget(self.tstr, 8, 3, 1, 1)
-
-        layout.addWidget(self.tsml, 9, 1, 1, 1)
-        layout.addWidget(self.tsmf, 9, 2, 1, 1)
-        layout.addWidget(self.tsmr, 9, 3, 1, 1)
-
-        layout.addWidget(self.tsbl, 10, 1, 1, 1)
-        layout.addWidget(self.tsbm, 10, 2, 1, 1)
-        layout.addWidget(self.tsbr, 10, 3, 1, 1)
-
-        layout.addWidget(self.copyButton, 11, 0, 1, 2)
-        layout.addWidget(self.placeButton, 11, 3, 1, 2)
-        self.UpdateFlag = False
-
-    def GetClipboardString(self):
-        midixwas0 = False
-        midiywas0 = False
-        if self.midix.value() == 0:
-            self.midix.setValue(self.wpos.value())
-            midixwas0 = True
-        if self.midiy.value() == 0:
-            self.midiy.setValue(self.hpos.value())
-            midiywas0 = True
-        ret = ''
-        convclip = ['ReggieClip']
-
-        # Paint the top tiles
-
-        # Top-left tip
-        convclip.append('0:%d:%d:%d:0:0:1:1' % (self.tileset.value()-1, self.tstl.value(), self.layer.value()))
-        # Top Ground
-        remnx = self.wpos.value() - 2
-        remx = 1
-        while True:
-            if remnx >= self.midix.value():
-                convclip.append('0:%d:%d:%d:%d:0:%d:%d' % (self.tileset.value()-1, self.tstg.value(), self.layer.value(), remx, self.midix.value(), 1))
-                remnx -= self.midix.value()
-                remx += self.midix.value()
-            else:
-                convclip.append('0:%d:%d:%d:%d:0:%d:%d' % (self.tileset.value()-1, self.tstg.value(), self.layer.value(), remx, remnx, 1))
-                break
-
-        # Top-right tip
-        convclip.append('0:%d:%d:%d:%d:0:1:1' % (self.tileset.value()-1, self.tstr.value(), self.layer.value(), self.wpos.value() - 1))
-
-        # Paint the middle tiles
-
-        remny = self.hpos.value() -2
-        remy = 1
-
-        # Middle-left edge
-        while True:
-            if remny >= self.midiy.value():
-                convclip.append('0:%d:%d:%d:0:%d:%d:%d' % (self.tileset.value()-1, self.tsml.value(), self.layer.value(), remy ,1, self.midiy.value()))
-                remny -= self.midiy.value()
-                remy += self.midiy.value()
-            else:
-                convclip.append('0:%d:%d:%d:0:%d:%d:%d' % (self.tileset.value()-1, self.tsml.value(), self.layer.value(), remy, 1, remny))
-                break
-
-
-
-        # Middle Filler! Hard
-        fullwidt = int(math_floor((self.wpos.value()-2) / self.midix.value()))
-
-        widtremainder = int(math_floor((self.wpos.value()-2) % self.midix.value()))
-
-        fullvert = int(math_floor((self.hpos.value()-2) / self.midiy.value()))
-        vertremainder = int(math_floor((self.hpos.value()-2) % self.midiy.value()))
-
-
-
-        for x in range(fullwidt):
-            for y in range(fullvert):
-                convclip.append('0:%d:%d:%d:%d:%d:%d:%d' % (self.tileset.value()-1, self.tsmf.value(), self.layer.value(), (x*self.midix.value()) +1, (y*self.midiy.value()) +1 ,self.midix.value(), self.midiy.value()))
-
-
-        # Now paint the remainders
-        if vertremainder:
-            remnx = self.wpos.value() - 2 - widtremainder
-            remx = 1
-            while True:
-                if remnx >= self.midix.value():
-                    convclip.append('0:%d:%d:%d:%d:%d:%d:%d' % (self.tileset.value()-1, self.tsmf.value(), self.layer.value(), remx, self.hpos.value() - 1 - vertremainder , self.midix.value(), vertremainder))
-                    remnx -= self.midix.value()
-                    remx += self.midix.value()
-
-                else:
-                    convclip.append('0:%d:%d:%d:%d:%d:%d:%d' % (self.tileset.value()-1, self.tsmf.value(), self.layer.value(), remx, self.hpos.value() - 1 - vertremainder, remnx, vertremainder))
-                    break
-
-        if widtremainder > 0:
-            remny = self.hpos.value() - 2 - vertremainder
-            remy = 1
-            while True:
-                if remny >= self.midiy.value():
-                    convclip.append('0:%d:%d:%d:%d:%d:%d:%d' % (self.tileset.value()-1, self.tsmf.value(), self.layer.value(), self.wpos.value() - 1 - widtremainder, remy , widtremainder, self.midiy.value()))
-                    remny -= self.midiy.value()
-                    remy += self.midiy.value()
-
-                else:
-                    convclip.append('0:%d:%d:%d:%d:%d:%d:%d' % (self.tileset.value()-1, self.tsmf.value(), self.layer.value(), self.wpos.value() - 1 - widtremainder, remy , widtremainder, remny))
-                    break
-
-        if vertremainder and widtremainder:
-            convclip.append('0:%d:%d:%d:%d:%d:%d:%d' % (self.tileset.value()-1, self.tsmf.value(), self.layer.value(), self.wpos.value() - 1 - widtremainder, self.hpos.value() - 1 - vertremainder , widtremainder, vertremainder))
-
-
-        # Middle-right edge
-
-        remny = self.hpos.value() -2
-        remy = 1
-        while True:
-            if remny >= self.midiy.value():
-                convclip.append('0:%d:%d:%d:%d:%d:%d:%d' % (self.tileset.value()-1, self.tsmr.value(), self.layer.value(), self.wpos.value() -1, remy ,1, self.midiy.value()))
-                remny -= self.midiy.value()
-                remy += self.midiy.value()
-            else:
-                convclip.append('0:%d:%d:%d:%d:%d:%d:%d' % (self.tileset.value()-1, self.tsmr.value(), self.layer.value(), self.wpos.value() -1, remy, 1, remny))
-                break
-
-
-        # Paint the bottom tiles
-
-        # bottom-left tip
-        convclip.append('0:%d:%d:%d:0:%d:1:1' % (self.tileset.value()-1, self.tsbl.value(), self.layer.value(), self.hpos.value() -1))
-        # Bottom Roof
-        remnx = self.wpos.value() - 2
-        remx = 1
-        while True:
-            if remnx >= self.midix.value():
-                convclip.append('0:%d:%d:%d:%d:%d:%d:%d' % (self.tileset.value()-1, self.tsbm.value(), self.layer.value(), remx, self.hpos.value() -1, self.midix.value(), 1))
-                remnx -= self.midix.value()
-                remx += self.midix.value()
-            else:
-                convclip.append('0:%d:%d:%d:%d:%d:%d:%d' % (self.tileset.value()-1, self.tsbm.value(), self.layer.value(), remx, self.hpos.value() -1, remnx, 1))
-                break
-
-        # Bottom-right tip
-        convclip.append('0:%d:%d:%d:%d:%d:1:1' % (self.tileset.value()-1, self.tsbr.value(), self.layer.value(), self.wpos.value() - 1, self.hpos.value() -1))
-        convclip.append('%')
-        if midixwas0:
-            self.midix.setValue(0)
-        if midiywas0:
-            self.midiy.setValue(0)
-        return '|'.join(convclip)
-
-    @QtCore.pyqtSlot()
-    def HandleCopy(self):
-        """
-        Makes a copy of the island
-        """
-        retcb = self.GetClipboardString()
-        mainWindow.actions['paste'].setEnabled(True)
-        mainWindow.clipboard = retcb
-        mainWindow.systemClipboard.setText(mainWindow.clipboard)
-
-
-    @QtCore.pyqtSlot()
-    def HandlePlace(self):
-        """
-        Places the island directly into the editor
-        """
-        retcb = self.GetClipboardString()
-        mainWindow.placeEncodedObjects(retcb)
-
-
+        
 class LocationEditorWidget(QtWidgets.QWidget):
     """
     Widget for editing location properties
@@ -10406,8 +10094,8 @@ class AboutDialog(QtWidgets.QDialog):
         description += '.main {font-size: 12px}'
         description += '</style></head><body>'
         description += '<center><h1><i>Reggie!</i> Level Editor</h1><div class=\'main\'>'
-        description += '<i>Reggie! Level Editor</i> is an open-source global project started by Treeki in 2010 that aims to bring you the fun of designing original New Super Mario Bros. Wii&trade;-compatible levels.<br>'
-        description += 'Interested? Check out <a href=\'http://rvlution.net/reggie\'>rvlution.net/reggie</a> for updates and related downloads, or <a href=\'http://rvlution.net/forums\'>rvlution.net/forums</a> to get in touch with the developers.<br>'
+        description += '<i>Reggie! Level Editor</i> is an open-source global project started by Treeki in 2010 that aimed to bring New Super Mario Bros. Wii&trade; levels. Now in later years, brings you New Super Mario Bros. U&trade;!<br>'
+        description += 'Interested? Check out <a href=\'https://github.com/MrRean/ReggieNext-NSMBU\'>https://github.com/MrRean/ReggieNext-NSMBU</a> for updates and related downloads, or <a href=\'http://rhcafe.us.to\'>rhcafe.us.to</a> to get in touch with the developers.<br>'
         description += '</div></center></body></html>'
 
         # Description label
@@ -12390,6 +12078,18 @@ class ReggieGameDefinition():
         if setname is None: return str(setting('GamePath_NSMBU'))
         else: return str(setname)
 
+    def GetSavePath(self):
+        """
+        Returns the save path
+        """
+        if not self.custom: return str(setting('SavePath_NSMBU'))
+        name = 'SavePath_' + self.name
+        setname = setting(name)
+
+        # Use the default if there are no settings for this yet
+        if setname is None: return str(setting('SavePath_NSMBU'))
+        else: return str(setname)
+
     def SetGamePath(self, path):
         """
         Sets the game path
@@ -12397,6 +12097,15 @@ class ReggieGameDefinition():
         if not self.custom: setSetting('GamePath_NSMBU', path)
         else:
             name = 'GamePath_' + self.name
+            setSetting(name, path)
+
+    def SetSavePath(self, path):
+        """
+        Sets the save path
+        """
+        if not self.custom: setSetting('SavePath_NSMBU', path)
+        else:
+            name = 'SavePath_' + self.name
             setSetting(name, path)
 
     def GetGamePaths(self):
@@ -12415,7 +12124,22 @@ class ReggieGameDefinition():
             paths.append(stg)
             return paths
 
+    def GetSavePaths(self):
+        """
+        Returns game paths of this gamedef and its bases
+        """
+        mainpath = str(setting('SavePath_NSMBU'))
+        if not self.custom: return [mainpath,]
 
+        name = 'SavePath_' + self.name
+        stg = setting(name)
+        if self.base is None:
+            return [mainpath, stg]
+        else:
+            paths = self.base.GetSavePaths()
+            paths.append(stg)
+            return paths
+        
     def GetLastLevel(self):
         """
         Returns the last loaded level
@@ -12786,6 +12510,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.CreateAction('metainfo', self.HandleInfo, GetIcon('info'), trans.string('MenuItems', 12), trans.string('MenuItems', 13), QtGui.QKeySequence('Ctrl+Alt+I'))
         self.CreateAction('screenshot', self.HandleScreenshot, GetIcon('screenshot'), trans.string('MenuItems', 14), trans.string('MenuItems', 15), QtGui.QKeySequence('Ctrl+Alt+S'))
         self.CreateAction('changegamepath', self.HandleChangeGamePath, GetIcon('folderpath'), trans.string('MenuItems', 16), trans.string('MenuItems', 17), QtGui.QKeySequence('Ctrl+Alt+G'))
+        self.CreateAction('changesavepath', self.HandleChangeSavePath, GetIcon('folderpath'), trans.string('MenuItems', 134), trans.string('MenuItems', 135), QtGui.QKeySequence('Ctrl+Alt+L'))
         self.CreateAction('preferences', self.HandlePreferences, GetIcon('settings'), trans.string('MenuItems', 18), trans.string('MenuItems', 19), QtGui.QKeySequence('Ctrl+Alt+P'))
         self.CreateAction('exit', self.HandleExit, GetIcon('delete'), trans.string('MenuItems', 20), trans.string('MenuItems', 21), QtGui.QKeySequence('Ctrl+Q'))
 
@@ -12889,6 +12614,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         fmenu.addSeparator()
         fmenu.addAction(self.actions['screenshot'])
         fmenu.addAction(self.actions['changegamepath'])
+        fmenu.addAction(self.actions['changesavepath'])
         fmenu.addAction(self.actions['preferences'])
         fmenu.addSeparator()
         fmenu.addAction(self.actions['exit'])
@@ -13011,6 +12737,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
                 'metainfo',
                 'screenshot',
                 'changegamepath',
+                'changesavepath',
                 'preferences',
                 'exit',
             ), (
@@ -13189,26 +12916,6 @@ class ReggieWindow(QtWidgets.QMainWindow):
 
         self.addDockWidget(Qt.RightDockWidgetArea, dock)
         dock.setFloating(True)
-
-        # create the island generator panel
-        dock = QtWidgets.QDockWidget(trans.string('MenuItems', 100), self)
-        dock.setVisible(False)
-        dock.setFeatures(QtWidgets.QDockWidget.DockWidgetMovable | QtWidgets.QDockWidget.DockWidgetFloatable | QtWidgets.QDockWidget.DockWidgetClosable)
-        dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
-        dock.setObjectName('islandgenerator') #needed for the state to save/restore correctly
-
-        self.islandGen = IslandGeneratorWidget()
-        dock.setWidget(self.islandGen)
-        self.islandGenDock = dock
-
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
-        dock.setFloating(True)
-        act = dock.toggleViewAction()
-        act.setShortcut(QtGui.QKeySequence('Ctrl+I'))
-        act.setIcon(GetIcon('islandgen'))
-        act.setToolTip(trans.string('MenuItems', 101))
-        if UseRibbon: self.ribbon.addIslandGen(dock, act)
-        else: self.vmenu.addAction(act)
 
         # create the palette
         dock = QtWidgets.QDockWidget(trans.string('MenuItems', 96), self)
@@ -14483,6 +14190,31 @@ class ReggieWindow(QtWidgets.QMainWindow):
             #break
 
         if not auto: self.LoadLevel(None, FirstLevels[CurrentGame], False, 1)
+        return True
+
+    @QtCore.pyqtSlot()
+    def HandleChangeSavePath(self, auto=False):
+        """
+        Change the save path used by the current game definition
+        """
+        if self.CheckDirty(): return
+
+        path = None
+        #while not isValidGamePath(path):
+        global CurrentGame
+        CurrentGame = NewSuperMarioBrosU
+        path = QtWidgets.QFileDialog.getExistingDirectory(None, trans.string('ChangeGamePath', 0, '[game]', gamedef.name))
+        if path == '':
+            return False
+
+        path = str(path)
+
+        if (not isValidGamePath(path)) and (not gamedef.custom): # custom gamedefs can use incomplete folders
+            QtWidgets.QMessageBox.information(None, trans.string('ChangeGamePath', 1),  trans.string('ChangeGamePath', 2))
+        else:
+            SetSavePath(path)
+            #break
+
         return True
 
 

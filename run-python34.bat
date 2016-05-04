@@ -34,8 +34,8 @@ goto :nogoaway
 :downloadthatxml
 
 @echo OFF
-echo Downloading latest spritedata...
-powershell -Command "Invoke-WebRequest http://rhcafe.us.to/categoryxml.php -OutFile reggiedata/category.xml"
+echo Downloading latest cateogry data...
+powershell -Command "Invoke-WebRequest http://rhcafe.us.to/categoryxml.php -OutFile reggiedata/spritecategories.xml"
 echo Done!
 echo Starting Reggie!
 cmd /k C:/Python34/python.exe reggie.py
