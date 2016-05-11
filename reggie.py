@@ -152,8 +152,8 @@ CurrentLevelNameForAutoOpenScript = 'AAAAAAAAAAAAAAAAAAAAAAAAAA'
 NewSuperMarioBrosU = 0
 NewSuperLuigiU = 1
 FileExtentions = {
-    NewSuperMarioBrosU: ('.szs',),
-    NewSuperLuigiU: ('.szs',),
+    NewSuperMarioBrosU: ('.szs','.sarc'),
+    NewSuperLuigiU: ('.szs','.sarc'),
     }
 FirstLevels = {
     NewSuperMarioBrosU: '1-1',
@@ -377,7 +377,7 @@ class ChooseLevelNameDialog(QtWidgets.QDialog):
             if isinstance(item[1], str):
                 # it's a level
                 node.setData(0, Qt.UserRole, item[1])
-                node.setToolTip(0, item[1] + '.szs')
+                node.setToolTip(0, item[1])
             else:
                 # it's a category
                 children = self.ParseCategory(item[1])
@@ -852,8 +852,7 @@ def isValidGamePath(check='ug'):
 
     if check is None or check == '': return False
     if not os.path.isdir(check): return False
-    #if not os.path.isdir(os.path.join(check, 'Unit')): return False
-    if not os.path.isfile(os.path.join(check, '1-1.szs')): return False
+    if not (os.path.isfile(os.path.join(check, '1-1.szs')) or os.path.isfile(os.path.join(check, '1-1.sarc'))): return False
 
     return True
 
@@ -1375,7 +1374,7 @@ def LoadActionsLists():
         (trans.string('MenuItems', 12), False, 'metainfo'),
         (trans.string('MenuItems', 14), True,  'screenshot'),
         (trans.string('MenuItems', 16), False, 'changegamepath'),
-        (trans.string('MenuItems', 16), False, 'changesavepath'),
+        #(trans.string('MenuItems', 16), False, 'changesavepath'),
         (trans.string('MenuItems', 18), False, 'preferences'),
         (trans.string('MenuItems', 20), False, 'exit'),
         )
@@ -9116,7 +9115,7 @@ class OldTilesetsTab(QtWidgets.QWidget):
 
             if result == QtWidgets.QDialog.Accepted:
                 fname = str(dbox.textbox.text())
-                if fname.endswith('.szs'): fname = fname[:-3]
+                if fname.endswith('.szs') or fname.endswith('.sarc'): fname = fname[:-3]
 
                 w.setItemText(index, trans.string('AreaDlg', 18, '[name]', fname))
                 w.setItemData(index, trans.string('AreaDlg', 17, '[name]', fname))
@@ -12510,7 +12509,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         self.CreateAction('metainfo', self.HandleInfo, GetIcon('info'), trans.string('MenuItems', 12), trans.string('MenuItems', 13), QtGui.QKeySequence('Ctrl+Alt+I'))
         self.CreateAction('screenshot', self.HandleScreenshot, GetIcon('screenshot'), trans.string('MenuItems', 14), trans.string('MenuItems', 15), QtGui.QKeySequence('Ctrl+Alt+S'))
         self.CreateAction('changegamepath', self.HandleChangeGamePath, GetIcon('folderpath'), trans.string('MenuItems', 16), trans.string('MenuItems', 17), QtGui.QKeySequence('Ctrl+Alt+G'))
-        self.CreateAction('changesavepath', self.HandleChangeSavePath, GetIcon('folderpath'), trans.string('MenuItems', 134), trans.string('MenuItems', 135), QtGui.QKeySequence('Ctrl+Alt+L'))
+        #self.CreateAction('changesavepath', self.HandleChangeSavePath, GetIcon('folderpath'), trans.string('MenuItems', 134), trans.string('MenuItems', 135), QtGui.QKeySequence('Ctrl+Alt+L'))
         self.CreateAction('preferences', self.HandlePreferences, GetIcon('settings'), trans.string('MenuItems', 18), trans.string('MenuItems', 19), QtGui.QKeySequence('Ctrl+Alt+P'))
         self.CreateAction('exit', self.HandleExit, GetIcon('delete'), trans.string('MenuItems', 20), trans.string('MenuItems', 21), QtGui.QKeySequence('Ctrl+Q'))
 
@@ -12614,7 +12613,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
         fmenu.addSeparator()
         fmenu.addAction(self.actions['screenshot'])
         fmenu.addAction(self.actions['changegamepath'])
-        fmenu.addAction(self.actions['changesavepath'])
+        #fmenu.addAction(self.actions['changesavepath'])
         fmenu.addAction(self.actions['preferences'])
         fmenu.addSeparator()
         fmenu.addAction(self.actions['exit'])
@@ -12737,7 +12736,7 @@ class ReggieWindow(QtWidgets.QMainWindow):
                 'metainfo',
                 'screenshot',
                 'changegamepath',
-                'changesavepath',
+                #'changesavepath',
                 'preferences',
                 'exit',
             ), (
